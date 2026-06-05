@@ -285,12 +285,20 @@ class Exporter:
             periodo_fim=date_to,
         )
 
-    def _enriquecer_com_author(self, batch: list[dict], log: LogCallback) -> None:
+    def _enriquecer_com_author(
+        self,
+        batch: list[dict],
+        log: LogCallback,
+        stop: StopChecker,
+    ) -> None:
         """Injeta __author__ em cada atividade, buscando em /history/{lawsuit_id}.
 
         Cacheia por lawsuit_id pra não fazer GET repetido. Cada lookup novo
         custa 1 request (e ~2.1s pelo rate limit), então pra 45k tarefas
         distribuídas em N processos únicos, o overhead total ≈ N × 2.1s.
+
+        Checa `stop()` antes de cada lookup pra responder a cancelamento.
+        Lookups já feitos ficam preservados no cache pra retomada.
         """
         ids_novos: list[int] = []
         for a in batch:
@@ -307,6 +315,8 @@ class Exporter:
             )
 
         for lid in ids_novos:
+            if stop():
+                raise ExportCancelado()
             try:
                 resposta = self.client.get_history(lid)
                 self._historico_cache[lid] = self._build_history_map(resposta)
@@ -414,7 +424,7 @@ class Exporter:
                     log("INFO", f"  totalCount da janela {janela.label()}: {total_count}")
 
             self._auditar_chaves(data, log)
-            self._enriquecer_com_author(data, log)
+            self._enriquecer_com_author(data, log, stop)
 
             gravados = gravar_jsonl_append(jsonl_path, data)
             offset += len(data)
