@@ -4,11 +4,12 @@ from datetime import date, datetime
 from pathlib import Path
 
 from PySide6.QtCore import QDate, Qt, QThread, QUrl, Signal
-from PySide6.QtGui import QAction, QDesktopServices, QFont, QIcon
+from PySide6.QtGui import QAction, QColor, QDesktopServices, QFont, QIcon
 from PySide6.QtWidgets import (
     QDateEdit,
     QFormLayout,
     QFrame,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -57,18 +58,21 @@ STATUS_LABEL = {
 class Card(QFrame):
     def __init__(self, titulo: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setObjectName("card")
+        self.setFrameShape(QFrame.Shape.NoFrame)
+
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(12)
+        shadow.setOffset(0, 1)
+        shadow.setColor(QColor(26, 36, 32, 18))  # ~7% do foreground
+        self.setGraphicsEffect(shadow)
 
         self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(16, 16, 16, 16)
-        self._layout.setSpacing(10)
+        self._layout.setContentsMargins(20, 20, 20, 20)
+        self._layout.setSpacing(12)
 
         titulo_label = QLabel(titulo)
-        f = QFont()
-        f.setBold(True)
-        f.setPointSize(11)
-        titulo_label.setFont(f)
+        titulo_label.setObjectName("cardTitle")
         self._layout.addWidget(titulo_label)
 
     def add(self, w: QWidget) -> None:
@@ -126,18 +130,45 @@ class MainWindow(QMainWindow):
     def _build_central(self) -> None:
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         central = QWidget()
+        central.setObjectName("centralWidget")
         scroll.setWidget(central)
 
         v = QVBoxLayout(central)
-        v.setContentsMargins(20, 20, 20, 20)
-        v.setSpacing(16)
+        v.setContentsMargins(32, 28, 32, 28)
+        v.setSpacing(24)
 
+        v.addLayout(self._build_header())
         v.addWidget(self._build_card_novo_export())
         v.addWidget(self._build_card_andamento())
         v.addWidget(self._build_card_historico())
+        v.addStretch()
 
         self.setCentralWidget(scroll)
+
+    def _build_header(self) -> QVBoxLayout:
+        layout = QVBoxLayout()
+        layout.setSpacing(4)
+        layout.setContentsMargins(0, 0, 0, 4)
+
+        sobretitulo = QLabel("FERRAMENTAS INTERNAS")
+        sobretitulo.setObjectName("sectionLabel")
+        layout.addWidget(sobretitulo)
+
+        titulo = QLabel("AdvBox Export")
+        f = QFont()
+        f.setPointSize(22)
+        f.setWeight(QFont.Weight.DemiBold)
+        titulo.setFont(f)
+        layout.addWidget(titulo)
+
+        subtitulo = QLabel("Exporta atividades da AdvBox em XLSX e CSV sem o limite de 1.000 do painel web.")
+        subtitulo.setObjectName("mutedLabel")
+        subtitulo.setWordWrap(True)
+        layout.addWidget(subtitulo)
+
+        return layout
 
     def _build_card_novo_export(self) -> Card:
         card = Card("Novo export")
@@ -159,7 +190,12 @@ class MainWindow(QMainWindow):
         form.addRow("Até:", self.input_ate)
         card.add_layout(form)
 
+        atalhos_label = QLabel("ATALHOS")
+        atalhos_label.setObjectName("sectionLabel")
+        card.add(atalhos_label)
+
         atalhos = QHBoxLayout()
+        atalhos.setSpacing(8)
         for label, range_fn in [
             ("Este mês", self._range_este_mes),
             ("Mês passado", self._range_mes_passado),
@@ -167,16 +203,19 @@ class MainWindow(QMainWindow):
             ("Backfill completo", self._range_backfill),
         ]:
             btn = QPushButton(label)
-            btn.setFlat(True)
+            btn.setProperty("variant", "ghost")
             btn.clicked.connect(range_fn)
             atalhos.addWidget(btn)
         atalhos.addStretch()
         card.add_layout(atalhos)
 
         self.btn_exportar = QPushButton("Exportar agora")
-        self.btn_exportar.setMinimumHeight(36)
+        self.btn_exportar.setMinimumHeight(40)
         self.btn_exportar.clicked.connect(self._iniciar_export)
-        card.add(self.btn_exportar)
+        botoes_row = QHBoxLayout()
+        botoes_row.addStretch()
+        botoes_row.addWidget(self.btn_exportar)
+        card.add_layout(botoes_row)
 
         return card
 
@@ -184,6 +223,7 @@ class MainWindow(QMainWindow):
         card = Card("Em andamento")
 
         self.lbl_progresso = QLabel("—")
+        self.lbl_progresso.setObjectName("mutedLabel")
         card.add(self.lbl_progresso)
 
         self.progress_bar = QProgressBar()
@@ -194,15 +234,16 @@ class MainWindow(QMainWindow):
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
         self.log_view.setMaximumBlockCount(2000)
-        self.log_view.setMinimumHeight(180)
-        self.log_view.setStyleSheet(
-            "QPlainTextEdit { font-family: 'Cascadia Code','Fira Code',monospace; font-size: 11px; }"
-        )
+        self.log_view.setMinimumHeight(200)
         card.add(self.log_view)
 
-        self.btn_cancelar = QPushButton("Cancelar")
+        cancelar_row = QHBoxLayout()
+        cancelar_row.addStretch()
+        self.btn_cancelar = QPushButton("Cancelar export")
+        self.btn_cancelar.setProperty("variant", "danger")
         self.btn_cancelar.clicked.connect(self._cancelar_export)
-        card.add(self.btn_cancelar)
+        cancelar_row.addWidget(self.btn_cancelar)
+        card.add_layout(cancelar_row)
 
         self.card_andamento = card
         card.setVisible(False)
@@ -214,6 +255,7 @@ class MainWindow(QMainWindow):
         topo = QHBoxLayout()
         topo.addStretch()
         btn_refresh = QPushButton("Atualizar")
+        btn_refresh.setProperty("variant", "ghost")
         btn_refresh.clicked.connect(self._refresh_historico)
         topo.addWidget(btn_refresh)
         card.add_layout(topo)
@@ -432,9 +474,10 @@ class MainWindow(QMainWindow):
 
     def _build_acoes_widget(self, row: ExportRow) -> QWidget:
         w = QWidget()
+        w.setStyleSheet("background: transparent;")
         h = QHBoxLayout(w)
         h.setContentsMargins(4, 2, 4, 2)
-        h.setSpacing(4)
+        h.setSpacing(6)
 
         for label, path in [
             ("XLSX", row.caminho_xlsx),
@@ -442,6 +485,10 @@ class MainWindow(QMainWindow):
             ("Log", row.caminho_log),
         ]:
             btn = QPushButton(label)
+            btn.setProperty("variant", "outline")
+            btn.setMinimumHeight(28)
+            btn.setMaximumHeight(28)
+            btn.setStyleSheet("padding: 2px 10px; font-size: 12px;")
             btn.setEnabled(bool(path) and Path(path).exists() if path else False)
             if path:
                 btn.clicked.connect(lambda _checked=False, p=path: self._abrir_arquivo(p))

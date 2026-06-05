@@ -5,7 +5,6 @@ description = "Exportador de atividades da AdvBox com UI desktop"
 requires-python = ">=3.10"
 dependencies = [
     "PySide6>=6.7",
-    "qt-material>=2.14",
     "requests>=2.32",
     "python-dotenv>=1.0",
     "openpyxl>=3.1",
@@ -26,3 +25,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["advbox_export*"]
+
+[tool.setuptools.package-data]
+"advbox_export.ui" = ["styles.qss", "fonts/*.ttf"]
