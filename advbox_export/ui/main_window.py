@@ -336,7 +336,8 @@ class MainWindow(QMainWindow):
             ["Data", "Período", "Total", "Status", "Duração", "Erro", "Ações"]
         )
         self.tabela.verticalHeader().setVisible(False)
-        self.tabela.verticalHeader().setDefaultSectionSize(44)
+        self.tabela.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self.tabela.verticalHeader().setMinimumSectionSize(48)
         self.tabela.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.tabela.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.tabela.setAlternatingRowColors(True)
@@ -570,8 +571,9 @@ class MainWindow(QMainWindow):
         w = QFrame()
         w.setFrameShape(QFrame.Shape.NoFrame)
         w.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        w.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         h = QHBoxLayout(w)
-        h.setContentsMargins(8, 6, 8, 6)
+        h.setContentsMargins(8, 8, 8, 8)
         h.setSpacing(6)
 
         for label, path in [
@@ -582,6 +584,7 @@ class MainWindow(QMainWindow):
             btn = QPushButton(label)
             btn.setProperty("variant", "outline-sm")
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
             existe = bool(path) and Path(path).exists() if path else False
             btn.setEnabled(existe)
             if path:

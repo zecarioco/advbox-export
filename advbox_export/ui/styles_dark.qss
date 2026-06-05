@@ -188,16 +188,18 @@ QPushButton[variant="chip"]:checked:hover {
 QPushButton[variant="outline-sm"] {
     background-color: transparent;
     color: #f3ede5;
-    border: 1px solid #2d3d33;
+    border: 1px solid #3d524a;
     border-radius: 6px;
-    padding: 4px 10px;
+    padding: 6px 12px;
     font-size: 12px;
     font-weight: 500;
-    min-height: 14px;
+    min-height: 22px;
+    min-width: 56px;
 }
 QPushButton[variant="outline-sm"]:hover {
     background-color: #223028;
-    border-color: #3d524a;
+    border-color: #5ba367;
+    color: #5ba367;
 }
 QPushButton[variant="outline-sm"]:disabled {
     background-color: transparent;
