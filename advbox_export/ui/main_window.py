@@ -571,12 +571,12 @@ class MainWindow(QMainWindow):
         w = QFrame()
         w.setFrameShape(QFrame.Shape.NoFrame)
         w.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        w.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        w.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         w.setFixedHeight(40)
         h = QHBoxLayout(w)
         h.setContentsMargins(8, 6, 8, 6)
         h.setSpacing(6)
-        h.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+        h.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         for label, path in [
             ("XLSX", row.caminho_xlsx),
@@ -594,7 +594,6 @@ class MainWindow(QMainWindow):
                 btn.clicked.connect(lambda _checked=False, p=path: self._abrir_arquivo(p))
             h.addWidget(btn)
 
-        h.addStretch()
         return w
 
     def _abrir_arquivo(self, caminho: str) -> None:

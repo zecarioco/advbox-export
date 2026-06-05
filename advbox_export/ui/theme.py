@@ -31,7 +31,27 @@ def apply_theme(app: QApplication, theme: str = "light") -> None:
     qss_path = _RES_DIR / qss_file
     if not qss_path.exists():
         qss_path = _RES_DIR / "styles.qss"
-    app.setStyleSheet(qss_path.read_text(encoding="utf-8"))
+    qss = qss_path.read_text(encoding="utf-8")
+    qss = _injetar_paths_de_icones(qss, theme=theme)
+    app.setStyleSheet(qss)
+
+
+def _injetar_paths_de_icones(qss: str, *, theme: str) -> str:
+    """Substitui {{ICON_NOME}} pelos paths absolutos (sempre com '/').
+
+    QSS aceita url() com path absoluto; usar placeholders evita ter que compilar
+    qrc/resources e funciona igual em dev e empacotado.
+    """
+    sufixo = "dark" if theme == "dark" else "light"
+    icons_dir = _RES_DIR / "icons"
+    substituicoes = {
+        "{{CHEVRON_DOWN}}": icons_dir / f"chevron-down-{sufixo}.svg",
+        "{{CHEVRON_LEFT}}": icons_dir / f"chevron-left-{sufixo}.svg",
+        "{{CHEVRON_RIGHT}}": icons_dir / f"chevron-right-{sufixo}.svg",
+    }
+    for placeholder, path in substituicoes.items():
+        qss = qss.replace(placeholder, str(path).replace("\\", "/"))
+    return qss
 
 
 def _carregar_fontes() -> None:

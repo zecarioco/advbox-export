@@ -44,7 +44,9 @@ jobs:
             --windowed \
             --name AdvBoxExport \
             --add-data "advbox_export/ui/styles.qss:advbox_export/ui" \
+            --add-data "advbox_export/ui/styles_dark.qss:advbox_export/ui" \
             --add-data "advbox_export/ui/fonts:advbox_export/ui/fonts" \
+            --add-data "advbox_export/ui/icons:advbox_export/ui/icons" \
             advbox_export/__main__.py
           cd dist
           tar -czf ../AdvBoxExport-linux.tar.gz AdvBoxExport
@@ -61,7 +63,9 @@ jobs:
             --windowed \
             --name AdvBoxExport \
             --add-data "advbox_export/ui/styles.qss:advbox_export/ui" \
+            --add-data "advbox_export/ui/styles_dark.qss:advbox_export/ui" \
             --add-data "advbox_export/ui/fonts:advbox_export/ui/fonts" \
+            --add-data "advbox_export/ui/icons:advbox_export/ui/icons" \
             advbox_export/__main__.py
 
           # Ad-hoc signing: evita "app is damaged" em macOS recentes mesmo sem
@@ -96,7 +100,9 @@ jobs:
             --windowed `
             --name AdvBoxExport `
             --add-data "advbox_export/ui/styles.qss;advbox_export/ui" `
+            --add-data "advbox_export/ui/styles_dark.qss;advbox_export/ui" `
             --add-data "advbox_export/ui/fonts;advbox_export/ui/fonts" `
+            --add-data "advbox_export/ui/icons;advbox_export/ui/icons" `
             advbox_export/__main__.py
           Compress-Archive -Path dist\AdvBoxExport -DestinationPath AdvBoxExport-windows.zip
 

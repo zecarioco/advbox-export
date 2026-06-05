@@ -240,9 +240,93 @@ QComboBox:disabled {
 QDateEdit::drop-down,
 QComboBox::drop-down {
     subcontrol-origin: padding;
-    subcontrol-position: top right;
-    width: 24px;
+    subcontrol-position: center right;
+    width: 28px;
     border-left: 1px solid #2d3d33;
+}
+QDateEdit::down-arrow,
+QComboBox::down-arrow {
+    image: url({{CHEVRON_DOWN}});
+    width: 12px;
+    height: 12px;
+}
+
+/* ---------- QCalendarWidget (popup do DateEdit) ---------- */
+QCalendarWidget {
+    background-color: #18211b;
+    border: 1px solid #2d3d33;
+    border-radius: 10px;
+}
+QCalendarWidget QWidget {
+    background-color: #18211b;
+    color: #f3ede5;
+    font-size: 13px;
+}
+QCalendarWidget QWidget#qt_calendar_navigationbar {
+    background-color: #1a2420;
+    border-bottom: 1px solid #2d3d33;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    min-height: 40px;
+}
+QCalendarWidget QToolButton {
+    color: #f3ede5;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 6px 10px;
+    margin: 4px 2px;
+    font-size: 13px;
+    font-weight: 500;
+}
+QCalendarWidget QToolButton:hover {
+    background-color: #223028;
+    border-color: #2d3d33;
+}
+QCalendarWidget QToolButton::menu-indicator {
+    image: none;
+}
+QCalendarWidget QToolButton#qt_calendar_prevmonth {
+    qproperty-icon: url({{CHEVRON_LEFT}});
+    qproperty-iconSize: 14px 14px;
+}
+QCalendarWidget QToolButton#qt_calendar_nextmonth {
+    qproperty-icon: url({{CHEVRON_RIGHT}});
+    qproperty-iconSize: 14px 14px;
+}
+QCalendarWidget QSpinBox {
+    background-color: #18211b;
+    border: 1px solid #2d3d33;
+    border-radius: 6px;
+    padding: 4px 6px;
+    min-width: 60px;
+    color: #f3ede5;
+}
+QCalendarWidget QMenu {
+    background-color: #18211b;
+    border: 1px solid #2d3d33;
+    border-radius: 8px;
+    padding: 4px;
+}
+QCalendarWidget QMenu::item {
+    padding: 6px 16px;
+    border-radius: 4px;
+    color: #f3ede5;
+}
+QCalendarWidget QMenu::item:selected {
+    background-color: #223028;
+}
+QCalendarWidget QAbstractItemView {
+    background-color: #18211b;
+    selection-background-color: #5ba367;
+    selection-color: #0f1411;
+    color: #f3ede5;
+    outline: none;
+    gridline-color: transparent;
+    font-size: 13px;
+}
+QCalendarWidget QAbstractItemView:disabled {
+    color: #4a564f;
 }
 
 QCheckBox {
