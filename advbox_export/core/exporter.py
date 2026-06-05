@@ -24,6 +24,20 @@ logger = logging.getLogger(__name__)
 PAGE_SIZE = 1000
 STATE_VERSION = 1
 
+CHAVES_ATIVIDADE_CONHECIDAS = {
+    "id",
+    "date",
+    "date_deadline",
+    "task",
+    "reward",
+    "notes",
+    "local",
+    "lawsuits_id",
+    "created_at",
+    "lawsuit",
+    "users",
+}
+
 
 @dataclass
 class Janela:
@@ -134,6 +148,7 @@ class Exporter:
         self.state_dir = state_dir
         self.exports_dir.mkdir(parents=True, exist_ok=True)
         self.state_dir.mkdir(parents=True, exist_ok=True)
+        self._chaves_logadas = False
 
     def _state_path(self, slug: str) -> Path:
         return self.state_dir / f"{slug}.json"
@@ -268,6 +283,32 @@ class Exporter:
             periodo_fim=date_to,
         )
 
+    def _auditar_chaves(self, batch: list[dict], log: LogCallback) -> None:
+        """Loga 1 vez por export se aparecerem campos não previstos em CHAVES_ATIVIDADE_CONHECIDAS.
+
+        Útil pra detectar campos que a doc não menciona mas que a API retorna —
+        candidatos a entrar em storage.COLUNAS sem precisar abrir o JSONL na mão.
+        """
+        if self._chaves_logadas or not batch:
+            return
+        chaves_uniao: set[str] = set()
+        for a in batch:
+            if isinstance(a, dict):
+                chaves_uniao.update(a.keys())
+        novas = chaves_uniao - CHAVES_ATIVIDADE_CONHECIDAS
+        ausentes = CHAVES_ATIVIDADE_CONHECIDAS - chaves_uniao
+        if novas:
+            log(
+                "WARN",
+                f"campos NÃO documentados encontrados na resposta: {sorted(novas)} — considere incluir em storage.COLUNAS",
+            )
+        if ausentes:
+            log(
+                "INFO",
+                f"campos esperados ausentes neste batch: {sorted(ausentes)} (pode ser normal)",
+            )
+        self._chaves_logadas = True
+
     def _processar_janela(
         self,
         *,
@@ -311,6 +352,8 @@ class Exporter:
                 total_count = resposta.get("totalCount")
                 if isinstance(total_count, int):
                     log("INFO", f"  totalCount da janela {janela.label()}: {total_count}")
+
+            self._auditar_chaves(data, log)
 
             gravados = gravar_jsonl_append(jsonl_path, data)
             offset += len(data)

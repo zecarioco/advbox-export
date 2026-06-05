@@ -31,6 +31,13 @@ COLUNAS: list[tuple[str, str]] = [
     ("Criada em", "created_at"),
 ]
 
+# Incluídas só no XLSX (ocultas), pra você poder inspecionar atividades
+# suspeitas sem precisar abrir o JSONL bruto. Excluídas do CSV pra não poluir.
+COLUNAS_DEBUG_XLSX: list[tuple[str, str]] = [
+    ("Atividade (JSON bruto)", "_raw_atividade"),
+    ("Lawsuit (JSON bruto)", "_raw_lawsuit"),
+]
+
 
 def achatar_atividade(atividade: dict[str, Any]) -> dict[str, Any]:
     """Achata uma atividade do /posts em campos planos pra planilha."""
@@ -55,6 +62,8 @@ def achatar_atividade(atividade: dict[str, Any]) -> dict[str, Any]:
         "_importante": _flag_join(users, "important"),
         "_urgente": _flag_join(users, "urgent"),
         "_concluida": _flag_join(users, "completed"),
+        "_raw_atividade": json.dumps(atividade, ensure_ascii=False),
+        "_raw_lawsuit": json.dumps(lawsuit, ensure_ascii=False) if lawsuit else "",
     }
 
 
@@ -92,7 +101,9 @@ def gerar_xlsx(jsonl_path: Path, xlsx_path: Path) -> int:
     header_font = Font(bold=True, color="FFFFFF")
     header_fill = PatternFill("solid", fgColor="2E5BBA")
 
-    for col_idx, (header, _) in enumerate(COLUNAS, start=1):
+    colunas_xlsx = COLUNAS + COLUNAS_DEBUG_XLSX
+
+    for col_idx, (header, _) in enumerate(colunas_xlsx, start=1):
         cell = ws.cell(row=1, column=col_idx, value=header)
         cell.font = header_font
         cell.fill = header_fill
@@ -102,14 +113,20 @@ def gerar_xlsx(jsonl_path: Path, xlsx_path: Path) -> int:
     row_idx = 2
     for atividade in ler_jsonl(jsonl_path):
         achatada = achatar_atividade(atividade)
-        for col_idx, (_, key) in enumerate(COLUNAS, start=1):
+        for col_idx, (_, key) in enumerate(colunas_xlsx, start=1):
             ws.cell(row=row_idx, column=col_idx, value=achatada.get(key))
         row_idx += 1
 
-    # larguras decentes
     larguras = [12, 20, 20, 30, 12, 50, 30, 12, 28, 18, 40, 40, 12, 10, 12, 20]
     for i, w in enumerate(larguras, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
+
+    # colunas de debug: largas (caso desoculte) e ocultas por padrão
+    primeira_debug = len(COLUNAS) + 1
+    for i in range(primeira_debug, primeira_debug + len(COLUNAS_DEBUG_XLSX)):
+        col_letter = get_column_letter(i)
+        ws.column_dimensions[col_letter].width = 80
+        ws.column_dimensions[col_letter].hidden = True
 
     wb.save(xlsx_path)
     return row_idx - 2

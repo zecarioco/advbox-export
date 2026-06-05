@@ -24,6 +24,19 @@ Baixe o pacote do seu sistema na página de [Releases](../../releases) mais rece
 
 > Por que esse passo? O app não é assinado por uma conta Apple paga (US$ 99/ano), então o macOS bloqueia a primeira execução por padrão. O script `primeiro-uso.command` libera o app de uma vez — não é necessário rodá-lo de novo, mesmo após atualizações.
 
+#### Se mesmo depois disso o macOS bloquear
+
+Em versões mais novas do macOS, mesmo depois do `primeiro-uso.command` pode aparecer um aviso ao abrir o AdvBox Export pela primeira vez:
+
+> **"AdvBoxExport.app" cannot be opened because the developer cannot be verified.**
+
+Saída em 2 passos:
+
+1. Clique em **Cancelar** no aviso.
+2. Abra **Ajustes do Sistema → Privacidade e Segurança**. No fim da página, vai aparecer uma linha "AdvBoxExport.app foi bloqueado" com um botão **Abrir Mesmo Assim** (ou **Open Anyway**). Clique nele e confirme. Depois disso o app abre normal sempre.
+
+Esse passo extra também só precisa ser feito uma vez.
+
 ### Linux
 1. Extraia o `.tar.gz` em `~/Programas/`:
    ```bash

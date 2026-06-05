@@ -16,8 +16,8 @@ DEFAULT_TIMEOUT_SECONDS = 30.0
 MIN_INTERVAL_SECONDS = 2.1
 
 # A doc não menciona Retry-After. Espera fixa em 429.
-RATE_LIMIT_SLEEP_SECONDS = 60.0
-MAX_RETRIES_RATE_LIMIT = 3
+RATE_LIMIT_SLEEP_FALLBACK_SECONDS = 60.0
+MAX_RETRIES_RATE_LIMIT = 5
 MAX_RETRIES_SERVER_ERROR = 3
 
 
@@ -75,6 +75,7 @@ class AdvboxClient:
                 raise AdvboxError(f"falha de rede em GET {path}: {exc}") from exc
 
             status = response.status_code
+            self._log_rate_limit_headers(response)
 
             if status == 200:
                 try:
@@ -93,14 +94,16 @@ class AdvboxClient:
                     raise AdvboxRateLimitError(
                         f"429 persistente em GET {path} após {MAX_RETRIES_RATE_LIMIT} tentativas"
                     )
+                wait = self._retry_after_seconds(response)
                 logger.warning(
-                    "429 em %s — dormindo %.0fs (tentativa %d/%d)",
+                    "429 em %s — dormindo %.0fs (tentativa %d/%d, %s)",
                     path,
-                    RATE_LIMIT_SLEEP_SECONDS,
+                    wait,
                     rate_attempts,
                     MAX_RETRIES_RATE_LIMIT,
+                    "Retry-After do servidor" if response.headers.get("Retry-After") else "fallback fixo",
                 )
-                time.sleep(RATE_LIMIT_SLEEP_SECONDS)
+                time.sleep(wait)
                 continue
 
             if 500 <= status < 600:
@@ -124,6 +127,42 @@ class AdvboxClient:
             raise AdvboxError(
                 f"erro HTTP {status} em GET {path}: {response.text[:300]}"
             )
+
+    @staticmethod
+    def _retry_after_seconds(response: requests.Response) -> float:
+        """Lê Retry-After do response. Aceita segundos (int) ou HTTP-date.
+        Cai pro fallback fixo se ausente ou inválido.
+        """
+        raw = response.headers.get("Retry-After")
+        if not raw:
+            return RATE_LIMIT_SLEEP_FALLBACK_SECONDS
+        raw = raw.strip()
+        try:
+            segundos = float(raw)
+            if segundos < 0:
+                return RATE_LIMIT_SLEEP_FALLBACK_SECONDS
+            # capa em 5 min pra não travar o app horas se o servidor mandar algo absurdo
+            return min(segundos, 300.0)
+        except ValueError:
+            return RATE_LIMIT_SLEEP_FALLBACK_SECONDS
+
+    @staticmethod
+    def _log_rate_limit_headers(response: requests.Response) -> None:
+        """Loga headers de rate limit se aparecerem — a doc não menciona,
+        mas APIs costumam mandar mesmo assim. Útil pra calibrar throttling depois.
+        """
+        interessantes = [
+            "X-RateLimit-Limit",
+            "X-RateLimit-Remaining",
+            "X-RateLimit-Reset",
+            "RateLimit-Limit",
+            "RateLimit-Remaining",
+            "RateLimit-Reset",
+            "Retry-After",
+        ]
+        achados = {h: response.headers[h] for h in interessantes if h in response.headers}
+        if achados:
+            logger.debug("rate-limit headers: %s", achados)
 
     def list_atividades(
         self,
