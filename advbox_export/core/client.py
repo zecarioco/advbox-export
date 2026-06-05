@@ -9,7 +9,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_BASE_URL = "https://api.softwareadvbox.com.br"
+DEFAULT_BASE_URL = "https://app.advbox.com.br/api/v1"
 DEFAULT_TIMEOUT_SECONDS = 30.0
 
 # Rate limit oficial: 30 GET/min = 1 req a cada 2s. 2.1s dá margem pra clock skew.
