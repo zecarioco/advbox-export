@@ -9,17 +9,20 @@ Baixe o pacote do seu sistema na página de [Releases](../../releases) mais rece
 | Sistema | Arquivo |
 |---|---|
 | Windows 10/11 | `AdvBoxExport-windows.zip` |
-| macOS 12+ | `AdvBoxExport-macos.zip` |
+| macOS 12+ (Apple Silicon) | `AdvBoxExport-macos.dmg` |
 | Linux | `AdvBoxExport-linux.tar.gz` |
 
 ### Windows
 1. Extraia o `.zip` em qualquer pasta (ex.: `C:\Programas\AdvBoxExport`).
 2. Crie um atalho de `AdvBoxExport.exe` na área de trabalho.
 
-### macOS
-1. Extraia o `.zip` (gera `AdvBoxExport.app`).
-2. Mova para a pasta `Aplicativos`.
-3. Na primeira abertura, **clique com o botão direito** no app e escolha **Abrir** (depois confirme em "Abrir mesmo assim"). É necessário só na primeira vez — o app não é assinado por uma conta Apple paga.
+### macOS (Apple Silicon — M1/M2/M3/M4)
+1. Abra o `AdvBoxExport-macos.dmg`. Uma janela com o ícone do app aparece.
+2. Arraste **AdvBoxExport** para a pasta **Aplicativos**.
+3. **Apenas na primeira vez:** clique com o **botão direito** no arquivo `primeiro-uso.command` (dentro da janela do DMG) e escolha **Abrir**. Confirme em "Abrir" no aviso do macOS. Vai aparecer um Terminal por um segundo e depois uma mensagem confirmando que o app foi liberado.
+4. Pronto. Abra o **AdvBox Export** normalmente pelo Launchpad ou pela pasta Aplicativos.
+
+> Por que esse passo? O app não é assinado por uma conta Apple paga (US$ 99/ano), então o macOS bloqueia a primeira execução por padrão. O script `primeiro-uso.command` libera o app de uma vez — não é necessário rodá-lo de novo, mesmo após atualizações.
 
 ### Linux
 1. Extraia o `.tar.gz` em `~/Programas/`:

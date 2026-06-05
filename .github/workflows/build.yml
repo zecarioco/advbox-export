@@ -17,7 +17,7 @@ jobs:
           - os: ubuntu-22.04
             artifact_name: AdvBoxExport-linux.tar.gz
           - os: macos-latest
-            artifact_name: AdvBoxExport-macos.zip
+            artifact_name: AdvBoxExport-macos.dmg
           - os: windows-latest
             artifact_name: AdvBoxExport-windows.zip
     runs-on: ${{ matrix.os }}
@@ -48,6 +48,10 @@ jobs:
           cd dist
           tar -czf ../AdvBoxExport-linux.tar.gz AdvBoxExport
 
+      - name: Install create-dmg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install create-dmg
+
       - name: Build (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -57,8 +61,29 @@ jobs:
             --name AdvBoxExport \
             --collect-all qt_material \
             advbox_export/__main__.py
-          cd dist
-          zip -ry ../AdvBoxExport-macos.zip AdvBoxExport.app
+
+          # Ad-hoc signing: evita "app is damaged" em macOS recentes mesmo sem
+          # Apple Developer ID. Não dispensa o passo de quarantine na 1ª abertura.
+          codesign --force --deep --sign - dist/AdvBoxExport.app
+
+          # Layout do DMG: app + atalho Aplicativos + script de primeiro uso
+          mkdir -p dmg-staging
+          cp -R dist/AdvBoxExport.app dmg-staging/
+          cp packaging/macos/primeiro-uso.command dmg-staging/
+          chmod +x dmg-staging/primeiro-uso.command
+
+          create-dmg \
+            --volname "AdvBox Export" \
+            --window-pos 200 120 \
+            --window-size 640 420 \
+            --icon-size 96 \
+            --icon "AdvBoxExport.app" 160 180 \
+            --hide-extension "AdvBoxExport.app" \
+            --app-drop-link 480 180 \
+            --icon "primeiro-uso.command" 320 320 \
+            --no-internet-enable \
+            AdvBoxExport-macos.dmg \
+            dmg-staging/
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
