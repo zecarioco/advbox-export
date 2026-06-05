@@ -41,46 +41,53 @@ COLUNAS_DEBUG_XLSX: list[tuple[str, str]] = [
 ]
 
 
-_PRIORIDADES = {0: "BAIXA", 1: "NORMAL", 2: "ALTA", 3: "URGENTE"}
-
-
 def achatar_atividade(atividade: dict[str, Any]) -> dict[str, Any]:
-    """Achata uma atividade do /posts pros 17 campos do export do painel."""
+    """Achata uma atividade do /posts pros 17 campos do export do painel.
+
+    Mapeamento auditado em ~2500 atividades reais. A API REST entrega
+    11 campos top-level — Remetente e Tipo de ação não vêm da API e ficam
+    vazios. Término/Hora Término/Data Conclusão derivam de users[].completed
+    (no painel são o mesmo dado split em 2 colunas + 1 datetime).
+    """
     lawsuit = atividade.get("lawsuit") or {}
     customers = lawsuit.get("customers") or []
     users = atividade.get("users") or []
 
     data, hora = _split_datetime(atividade.get("date"))
-    fim_data, fim_hora = _split_datetime(
-        atividade.get("end_date") or atividade.get("date_end")
-    )
+    conclusao_raw = _primeira_data_conclusao(users)
+    fim_data, fim_hora = _split_datetime(conclusao_raw)
+
     return {
         "id": atividade.get("id"),
-        "_prioridade": _resolver_prioridade(atividade, users),
+        "_prioridade": "NORMAL",
         "_data": data,
         "_hora": hora,
         "_termino_data": fim_data,
         "_termino_hora": fim_hora,
         "_prazo_fatal": _formatar_data(atividade.get("date_deadline")),
-        "_data_conclusao": _resolver_data_conclusao(atividade, users),
+        "_data_conclusao": f"{fim_data} {fim_hora}".strip() if fim_data and fim_hora else (fim_data or ""),
         "reward": atividade.get("reward"),
         "task": atividade.get("task"),
         "local": atividade.get("local"),
-        "_remetente": _resolver_remetente(atividade),
+        "_remetente": "",
         "_destinatario": ", ".join(u.get("name", "") for u in users if u.get("name")),
         "_partes": ", ".join(c.get("name", "") for c in customers if c.get("name")),
         "_process_number": lawsuit.get("process_number"),
         "_protocol_number": lawsuit.get("protocol_number"),
-        "_tipo_acao": _primeiro_nao_nulo(
-            atividade.get("tipo_acao"),
-            atividade.get("task_type"),
-            atividade.get("category"),
-            (atividade.get("type") or {}).get("name") if isinstance(atividade.get("type"), dict) else atividade.get("type"),
-        ),
+        "_tipo_acao": "",
         "notes": atividade.get("notes"),
         "_raw_atividade": json.dumps(atividade, ensure_ascii=False),
         "_raw_lawsuit": json.dumps(lawsuit, ensure_ascii=False) if lawsuit else "",
     }
+
+
+def _primeira_data_conclusao(users: list[dict[str, Any]]) -> str:
+    """Primeiro users[].completed não-nulo encontrado (timestamp string)."""
+    for u in users:
+        c = u.get("completed")
+        if c and isinstance(c, str):
+            return c
+    return ""
 
 
 def _split_datetime(raw: Any) -> tuple[str, str]:
@@ -104,71 +111,6 @@ def _formatar_data(raw: Any) -> str:
     if len(parte_data) == 10 and parte_data[4] == "-" and parte_data[7] == "-":
         return f"{parte_data[8:10]}/{parte_data[5:7]}/{parte_data[0:4]}"
     return raw
-
-
-def _resolver_prioridade(atividade: dict[str, Any], users: list[dict[str, Any]]) -> str:
-    """Prioridade: tenta campo top-level, depois deriva das flags important/urgent."""
-    raw = atividade.get("priority")
-    if isinstance(raw, str) and raw:
-        return raw.upper()
-    if isinstance(raw, int) and raw in _PRIORIDADES:
-        return _PRIORIDADES[raw]
-    urgentes = sum(1 for u in users if u.get("urgent"))
-    importantes = sum(1 for u in users if u.get("important"))
-    if urgentes:
-        return "URGENTE"
-    if importantes:
-        return "ALTA"
-    return "NORMAL"
-
-
-def _resolver_data_conclusao(
-    atividade: dict[str, Any], users: list[dict[str, Any]]
-) -> str:
-    """Tenta campos top-level; senão pega o primeiro `users[].completed` parseável."""
-    for chave in ("completed_at", "completed_date", "date_completed"):
-        valor = atividade.get(chave)
-        if valor:
-            return _formatar_datetime(valor)
-    for u in users:
-        c = u.get("completed")
-        if c and isinstance(c, str) and len(c) >= 10:
-            return _formatar_datetime(c)
-    return ""
-
-
-def _formatar_datetime(raw: str) -> str:
-    """'2025-05-12 08:10:00' -> '12/05/2025 08:10'."""
-    data, hora = _split_datetime(raw)
-    if data and hora:
-        return f"{data} {hora}"
-    return data or hora or raw
-
-
-def _resolver_remetente(atividade: dict[str, Any]) -> str:
-    """Tenta vários campos comuns pra autor/criador. Vazio se nada bater."""
-    candidatos = (
-        atividade.get("sender"),
-        atividade.get("from"),
-        atividade.get("created_by_name"),
-        atividade.get("creator"),
-        atividade.get("user_name"),
-    )
-    for c in candidatos:
-        if isinstance(c, str) and c:
-            return c
-        if isinstance(c, dict):
-            nome = c.get("name") or c.get("nome")
-            if nome:
-                return nome
-    return ""
-
-
-def _primeiro_nao_nulo(*valores: Any) -> str:
-    for v in valores:
-        if v not in (None, ""):
-            return str(v)
-    return ""
 
 
 def gravar_jsonl_append(path: Path, atividades: Iterable[dict[str, Any]]) -> int:
