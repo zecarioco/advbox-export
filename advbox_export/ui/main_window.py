@@ -61,7 +61,7 @@ STATUS_LABEL = {
 
 
 class Card(QFrame):
-    def __init__(self, titulo: str, parent: QWidget | None = None) -> None:
+    def __init__(self, titulo: str | None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("card")
         self.setFrameShape(QFrame.Shape.NoFrame)
@@ -76,9 +76,10 @@ class Card(QFrame):
         self._layout.setContentsMargins(20, 20, 20, 20)
         self._layout.setSpacing(12)
 
-        titulo_label = QLabel(titulo)
-        titulo_label.setObjectName("cardTitle")
-        self._layout.addWidget(titulo_label)
+        if titulo:
+            titulo_label = QLabel(titulo)
+            titulo_label.setObjectName("cardTitle")
+            self._layout.addWidget(titulo_label)
 
     def add(self, w: QWidget) -> None:
         self._layout.addWidget(w)
@@ -326,42 +327,56 @@ class MainWindow(QMainWindow):
         return card
 
     def _build_card_historico(self) -> Card:
-        card = Card("Histórico")
+        card = Card(None)
 
-        topo = QHBoxLayout()
-        topo.addStretch()
+        header_row = QHBoxLayout()
+        header_row.setSpacing(12)
+
+        titulo = QLabel("Histórico")
+        f_titulo = QFont()
+        f_titulo.setPointSize(15)
+        f_titulo.setWeight(QFont.Weight.DemiBold)
+        titulo.setFont(f_titulo)
+        header_row.addWidget(titulo, 0, Qt.AlignmentFlag.AlignVCenter)
+        header_row.addStretch(1)
+
         btn_pasta = QPushButton("Abrir pasta de exports")
         btn_pasta.setProperty("variant", "outline")
         btn_pasta.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_pasta.setMinimumHeight(36)
         btn_pasta.clicked.connect(self._abrir_pasta_exports)
-        topo.addWidget(btn_pasta)
+        header_row.addWidget(btn_pasta, 0, Qt.AlignmentFlag.AlignVCenter)
+
         btn_refresh = QPushButton("Atualizar")
         btn_refresh.setProperty("variant", "ghost")
         btn_refresh.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_refresh.setMinimumHeight(36)
         btn_refresh.clicked.connect(self._refresh_historico)
-        topo.addWidget(btn_refresh)
-        card.add_layout(topo)
+        header_row.addWidget(btn_refresh, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        card.add_layout(header_row)
 
         self.tabela = QTableWidget(0, 7)
         self.tabela.setHorizontalHeaderLabels(
             ["Data", "Nome", "Período", "Total", "Status", "Duração", "Ações"]
         )
         self.tabela.verticalHeader().setVisible(False)
-        self.tabela.verticalHeader().setDefaultSectionSize(42)
-        self.tabela.verticalHeader().setMinimumSectionSize(42)
+        self.tabela.verticalHeader().setDefaultSectionSize(48)
+        self.tabela.verticalHeader().setMinimumSectionSize(48)
         self.tabela.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.tabela.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.tabela.setAlternatingRowColors(True)
         self.tabela.setShowGrid(False)
         header = self.tabela.horizontalHeader()
+        header.setMinimumSectionSize(70)
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.tabela.setColumnWidth(0, 150)
-        self.tabela.setColumnWidth(2, 230)
-        self.tabela.setColumnWidth(3, 90)
-        self.tabela.setColumnWidth(4, 120)
-        self.tabela.setColumnWidth(5, 90)
-        self.tabela.setColumnWidth(6, 280)
+        self.tabela.setColumnWidth(0, 140)
+        self.tabela.setColumnWidth(2, 210)
+        self.tabela.setColumnWidth(3, 80)
+        self.tabela.setColumnWidth(4, 110)
+        self.tabela.setColumnWidth(5, 80)
+        self.tabela.setColumnWidth(6, 340)
         self.tabela.setMinimumHeight(320)
         card.add(self.tabela)
 
@@ -601,7 +616,7 @@ class MainWindow(QMainWindow):
         h.setContentsMargins(0, 0, 0, 0)
         h.setSpacing(6)
 
-        h.addStretch(1)
+        h.addSpacing(16)
         for label, path in [
             ("XLSX", row.caminho_xlsx),
             ("CSV", row.caminho_csv),
@@ -620,11 +635,19 @@ class MainWindow(QMainWindow):
 
         h.addStretch(1)
 
+        # Separador vertical sutil pra isolar visualmente a lixeira
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.VLine)
+        sep.setFixedSize(1, 22)
+        sep.setStyleSheet("color: rgba(120,120,120,40); background-color: rgba(120,120,120,40);")
+        h.addWidget(sep, 0, Qt.AlignmentFlag.AlignVCenter)
+        h.addSpacing(8)
+
         btn_del = QPushButton()
         btn_del.setProperty("variant", "trash")
         btn_del.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_del.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        btn_del.setFixedSize(30, 30)
+        btn_del.setFixedSize(32, 32)
         btn_del.setToolTip("Excluir este export")
         sufixo = "dark" if self.config_store.load().theme == "dark" else "light"
         icone_path = _RES_DIR / "icons" / f"trash-{sufixo}.svg"
@@ -632,6 +655,7 @@ class MainWindow(QMainWindow):
             btn_del.setIcon(QIcon(str(icone_path)))
         btn_del.clicked.connect(lambda _checked=False, eid=row.id: self._deletar_registro(eid))
         h.addWidget(btn_del, 0, Qt.AlignmentFlag.AlignVCenter)
+        h.addSpacing(12)
 
         return w
 
