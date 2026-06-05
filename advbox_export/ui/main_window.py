@@ -107,8 +107,6 @@ class MainWindow(QMainWindow):
     def _build_menus(self) -> None:
         menu = self.menuBar()
         m_arquivo = menu.addMenu("&Arquivo")
-        m_arquivo.addAction(self._make_action("Abrir pasta de exports", self._abrir_pasta_exports))
-        m_arquivo.addSeparator()
         m_arquivo.addAction(self._make_action("Sair", self.close, "Ctrl+Q"))
 
         m_config = menu.addMenu("&Configurações")
@@ -321,8 +319,14 @@ class MainWindow(QMainWindow):
 
         topo = QHBoxLayout()
         topo.addStretch()
+        btn_pasta = QPushButton("Abrir pasta de exports")
+        btn_pasta.setProperty("variant", "outline")
+        btn_pasta.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_pasta.clicked.connect(self._abrir_pasta_exports)
+        topo.addWidget(btn_pasta)
         btn_refresh = QPushButton("Atualizar")
         btn_refresh.setProperty("variant", "ghost")
+        btn_refresh.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_refresh.clicked.connect(self._refresh_historico)
         topo.addWidget(btn_refresh)
         card.add_layout(topo)
@@ -332,19 +336,21 @@ class MainWindow(QMainWindow):
             ["Data", "Período", "Total", "Status", "Duração", "Erro", "Ações"]
         )
         self.tabela.verticalHeader().setVisible(False)
+        self.tabela.verticalHeader().setDefaultSectionSize(44)
         self.tabela.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.tabela.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.tabela.setAlternatingRowColors(True)
+        self.tabela.setShowGrid(False)
         header = self.tabela.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         header.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
-        self.tabela.setColumnWidth(0, 140)
-        self.tabela.setColumnWidth(1, 140)
+        self.tabela.setColumnWidth(0, 150)
+        self.tabela.setColumnWidth(1, 230)
         self.tabela.setColumnWidth(2, 90)
         self.tabela.setColumnWidth(3, 110)
         self.tabela.setColumnWidth(4, 90)
-        self.tabela.setColumnWidth(6, 220)
-        self.tabela.setMinimumHeight(280)
+        self.tabela.setColumnWidth(6, 230)
+        self.tabela.setMinimumHeight(320)
         card.add(self.tabela)
 
         return card
@@ -561,10 +567,11 @@ class MainWindow(QMainWindow):
             return iso
 
     def _build_acoes_widget(self, row: ExportRow) -> QWidget:
-        w = QWidget()
-        w.setStyleSheet("background: transparent;")
+        w = QFrame()
+        w.setFrameShape(QFrame.Shape.NoFrame)
+        w.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         h = QHBoxLayout(w)
-        h.setContentsMargins(4, 2, 4, 2)
+        h.setContentsMargins(8, 6, 8, 6)
         h.setSpacing(6)
 
         for label, path in [
@@ -573,11 +580,10 @@ class MainWindow(QMainWindow):
             ("Log", row.caminho_log),
         ]:
             btn = QPushButton(label)
-            btn.setProperty("variant", "outline")
-            btn.setMinimumHeight(28)
-            btn.setMaximumHeight(28)
-            btn.setStyleSheet("padding: 2px 10px; font-size: 12px;")
-            btn.setEnabled(bool(path) and Path(path).exists() if path else False)
+            btn.setProperty("variant", "outline-sm")
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            existe = bool(path) and Path(path).exists() if path else False
+            btn.setEnabled(existe)
             if path:
                 btn.clicked.connect(lambda _checked=False, p=path: self._abrir_arquivo(p))
             h.addWidget(btn)
