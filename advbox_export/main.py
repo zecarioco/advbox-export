@@ -4,6 +4,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 from PySide6.QtWidgets import QApplication
 
+from advbox_export.core.config import ConfigStore
+from advbox_export.core.paths import config_file
 from advbox_export.ui.main_window import MainWindow
 from advbox_export.ui.theme import apply_theme
 
@@ -15,7 +17,9 @@ def main() -> int:
 
     app = QApplication(sys.argv)
     app.setApplicationName("AdvBox Export")
-    apply_theme(app)
+
+    tema_inicial = ConfigStore(config_file()).load().theme
+    apply_theme(app, theme=tema_inicial)
 
     window = MainWindow()
     window.show()

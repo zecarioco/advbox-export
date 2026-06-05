@@ -21,18 +21,23 @@ def _resource_dir() -> Path:
 
 _RES_DIR = _resource_dir()
 _FONTS_DIR = _RES_DIR / "fonts"
-_QSS_PATH = _RES_DIR / "styles.qss"
+_FONTES_CARREGADAS = False
 
 
-def apply_theme(app: QApplication) -> None:
-    """Carrega fontes embarcadas e aplica o stylesheet sage green warm."""
+def apply_theme(app: QApplication, theme: str = "light") -> None:
+    """Carrega fontes embarcadas e aplica o stylesheet do tema escolhido."""
     _carregar_fontes()
-    qss = _QSS_PATH.read_text(encoding="utf-8")
-    app.setStyleSheet(qss)
+    qss_file = "styles_dark.qss" if theme == "dark" else "styles.qss"
+    qss_path = _RES_DIR / qss_file
+    if not qss_path.exists():
+        qss_path = _RES_DIR / "styles.qss"
+    app.setStyleSheet(qss_path.read_text(encoding="utf-8"))
 
 
 def _carregar_fontes() -> None:
-    if not _FONTS_DIR.exists():
+    global _FONTES_CARREGADAS
+    if _FONTES_CARREGADAS or not _FONTS_DIR.exists():
         return
     for fonte in sorted(_FONTS_DIR.glob("*.ttf")):
         QFontDatabase.addApplicationFont(str(fonte))
+    _FONTES_CARREGADAS = True

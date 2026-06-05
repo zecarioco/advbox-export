@@ -4,8 +4,10 @@ from datetime import date, datetime
 from pathlib import Path
 
 from PySide6.QtCore import QDate, Qt, QThread, QUrl, Signal
-from PySide6.QtGui import QAction, QColor, QDesktopServices, QFont, QIcon
+from PySide6.QtGui import QAction, QActionGroup, QColor, QDesktopServices, QFont, QIcon
 from PySide6.QtWidgets import (
+    QApplication,
+    QButtonGroup,
     QDateEdit,
     QFormLayout,
     QFrame,
@@ -45,6 +47,7 @@ from advbox_export.db import (
     ExportRow,
 )
 from advbox_export.ui.settings_dialog import SettingsDialog
+from advbox_export.ui.theme import apply_theme
 
 
 STATUS_LABEL = {
@@ -99,12 +102,6 @@ class MainWindow(QMainWindow):
         self._build_central()
         self._refresh_historico()
 
-        # Se não há token na primeira execução, sugere abrir Settings
-        if not self.config_store.is_configured():
-            self.statusBar().showMessage(
-                "Token não configurado — clique em Configurações pra colar o token AdvBox."
-            )
-
     # ---- Construção --------------------------------------------------------
 
     def _build_menus(self) -> None:
@@ -116,6 +113,23 @@ class MainWindow(QMainWindow):
 
         m_config = menu.addMenu("&Configurações")
         m_config.addAction(self._make_action("Editar configurações…", self._abrir_settings))
+
+        m_aparencia = menu.addMenu("&Aparência")
+        self.act_tema_claro = QAction("Tema &claro", self)
+        self.act_tema_claro.setCheckable(True)
+        self.act_tema_claro.triggered.connect(lambda: self._mudar_tema("light"))
+        self.act_tema_escuro = QAction("Tema &escuro", self)
+        self.act_tema_escuro.setCheckable(True)
+        self.act_tema_escuro.triggered.connect(lambda: self._mudar_tema("dark"))
+        grupo_tema = QActionGroup(self)
+        grupo_tema.setExclusive(True)
+        grupo_tema.addAction(self.act_tema_claro)
+        grupo_tema.addAction(self.act_tema_escuro)
+        m_aparencia.addAction(self.act_tema_claro)
+        m_aparencia.addAction(self.act_tema_escuro)
+        tema_atual = self.config_store.load().theme
+        self.act_tema_claro.setChecked(tema_atual == "light")
+        self.act_tema_escuro.setChecked(tema_atual == "dark")
 
         m_ajuda = menu.addMenu("&Ajuda")
         m_ajuda.addAction(self._make_action("Sobre", self._sobre))
@@ -140,6 +154,7 @@ class MainWindow(QMainWindow):
         v.setSpacing(24)
 
         v.addLayout(self._build_header())
+        v.addWidget(self._build_alerta_token())
         v.addWidget(self._build_card_novo_export())
         v.addWidget(self._build_card_andamento())
         v.addWidget(self._build_card_historico())
@@ -173,29 +188,15 @@ class MainWindow(QMainWindow):
     def _build_card_novo_export(self) -> Card:
         card = Card("Novo export")
 
-        form = QFormLayout()
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-
-        hoje = QDate.currentDate()
-        primeiro_dia_mes = QDate(hoje.year(), hoje.month(), 1)
-
-        self.input_de = QDateEdit(primeiro_dia_mes)
-        self.input_de.setCalendarPopup(True)
-        self.input_de.setDisplayFormat("dd/MM/yyyy")
-        self.input_ate = QDateEdit(hoje)
-        self.input_ate.setCalendarPopup(True)
-        self.input_ate.setDisplayFormat("dd/MM/yyyy")
-
-        form.addRow("De:", self.input_de)
-        form.addRow("Até:", self.input_ate)
-        card.add_layout(form)
-
-        atalhos_label = QLabel("ATALHOS")
+        atalhos_label = QLabel("ATALHOS DE PERÍODO")
         atalhos_label.setObjectName("sectionLabel")
         card.add(atalhos_label)
 
         atalhos = QHBoxLayout()
         atalhos.setSpacing(8)
+        atalhos.setContentsMargins(0, 4, 0, 8)
+        self.btn_group_atalhos = QButtonGroup(self)
+        self.btn_group_atalhos.setExclusive(True)
         for label, range_fn in [
             ("Este mês", self._range_este_mes),
             ("Mês passado", self._range_mes_passado),
@@ -203,21 +204,87 @@ class MainWindow(QMainWindow):
             ("Backfill completo", self._range_backfill),
         ]:
             btn = QPushButton(label)
-            btn.setProperty("variant", "ghost")
+            btn.setProperty("variant", "chip")
+            btn.setCheckable(True)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.clicked.connect(range_fn)
+            self.btn_group_atalhos.addButton(btn)
             atalhos.addWidget(btn)
         atalhos.addStretch()
         card.add_layout(atalhos)
 
+        periodo_label = QLabel("PERÍODO")
+        periodo_label.setObjectName("sectionLabel")
+        card.add(periodo_label)
+
+        hoje = QDate.currentDate()
+        primeiro_dia_mes = QDate(hoje.year(), hoje.month(), 1)
+
+        self.input_de = QDateEdit(primeiro_dia_mes)
+        self.input_de.setCalendarPopup(True)
+        self.input_de.setDisplayFormat("dd/MM/yyyy")
+        self.input_de.dateChanged.connect(self._desmarcar_atalhos)
+
+        self.input_ate = QDateEdit(hoje)
+        self.input_ate.setCalendarPopup(True)
+        self.input_ate.setDisplayFormat("dd/MM/yyyy")
+        self.input_ate.dateChanged.connect(self._desmarcar_atalhos)
+
+        form = QFormLayout()
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form.setContentsMargins(0, 4, 0, 4)
+        form.addRow("De:", self.input_de)
+        form.addRow("Até:", self.input_ate)
+        card.add_layout(form)
+
         self.btn_exportar = QPushButton("Exportar agora")
         self.btn_exportar.setMinimumHeight(40)
+        self.btn_exportar.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_exportar.clicked.connect(self._iniciar_export)
-        botoes_row = QHBoxLayout()
-        botoes_row.addStretch()
-        botoes_row.addWidget(self.btn_exportar)
-        card.add_layout(botoes_row)
+        card.add(self.btn_exportar)
 
         return card
+
+    def _build_alerta_token(self) -> QFrame:
+        banner = QFrame()
+        banner.setObjectName("alertCard")
+        banner.setFrameShape(QFrame.Shape.NoFrame)
+
+        sombra = QGraphicsDropShadowEffect(banner)
+        sombra.setBlurRadius(10)
+        sombra.setOffset(0, 1)
+        sombra.setColor(QColor(0, 0, 0, 18))
+        banner.setGraphicsEffect(sombra)
+
+        layout = QHBoxLayout(banner)
+        layout.setContentsMargins(20, 14, 20, 14)
+        layout.setSpacing(16)
+
+        texto = QVBoxLayout()
+        texto.setSpacing(2)
+        titulo = QLabel("Token AdvBox não configurado")
+        titulo.setObjectName("alertTitle")
+        corpo = QLabel(
+            "Configure o token antes de exportar — ele fica gravado só no seu computador."
+        )
+        corpo.setObjectName("alertBody")
+        corpo.setWordWrap(True)
+        texto.addWidget(titulo)
+        texto.addWidget(corpo)
+        layout.addLayout(texto, 1)
+
+        btn_config = QPushButton("Configurar agora")
+        btn_config.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_config.clicked.connect(self._abrir_settings)
+        layout.addWidget(btn_config, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        self.alerta_token = banner
+        self._refresh_alerta_token()
+        return banner
+
+    def _refresh_alerta_token(self) -> None:
+        if hasattr(self, "alerta_token"):
+            self.alerta_token.setVisible(not self.config_store.is_configured())
 
     def _build_card_andamento(self) -> Card:
         card = Card("Em andamento")
@@ -284,27 +351,48 @@ class MainWindow(QMainWindow):
 
     # ---- Atalhos de range --------------------------------------------------
 
+    def _setar_datas_silenciosamente(self, de: QDate, ate: QDate) -> None:
+        """Muda as datas sem disparar dateChanged (que deselecionaria o atalho)."""
+        self.input_de.blockSignals(True)
+        self.input_ate.blockSignals(True)
+        try:
+            self.input_de.setDate(de)
+            self.input_ate.setDate(ate)
+        finally:
+            self.input_de.blockSignals(False)
+            self.input_ate.blockSignals(False)
+
+    def _desmarcar_atalhos(self) -> None:
+        checado = self.btn_group_atalhos.checkedButton()
+        if checado is None:
+            return
+        self.btn_group_atalhos.setExclusive(False)
+        checado.setChecked(False)
+        self.btn_group_atalhos.setExclusive(True)
+
     def _range_este_mes(self) -> None:
         hoje = QDate.currentDate()
-        self.input_de.setDate(QDate(hoje.year(), hoje.month(), 1))
-        self.input_ate.setDate(hoje)
+        self._setar_datas_silenciosamente(QDate(hoje.year(), hoje.month(), 1), hoje)
 
     def _range_mes_passado(self) -> None:
         hoje = QDate.currentDate()
         primeiro = QDate(hoje.year(), hoje.month(), 1).addMonths(-1)
         ultimo = primeiro.addMonths(1).addDays(-1)
-        self.input_de.setDate(primeiro)
-        self.input_ate.setDate(ultimo)
+        self._setar_datas_silenciosamente(primeiro, ultimo)
 
     def _range_este_ano(self) -> None:
         hoje = QDate.currentDate()
-        self.input_de.setDate(QDate(hoje.year(), 1, 1))
-        self.input_ate.setDate(hoje)
+        self._setar_datas_silenciosamente(QDate(hoje.year(), 1, 1), hoje)
 
     def _range_backfill(self) -> None:
         hoje = QDate.currentDate()
-        self.input_de.setDate(QDate(hoje.year() - 6, 1, 1))
-        self.input_ate.setDate(hoje)
+        self._setar_datas_silenciosamente(QDate(hoje.year() - 6, 1, 1), hoje)
+
+    def _mudar_tema(self, theme: str) -> None:
+        cfg = self.config_store.load()
+        cfg.theme = theme
+        self.config_store.save(cfg)
+        apply_theme(QApplication.instance(), theme=theme)
 
     # ---- Ações principais --------------------------------------------------
 
@@ -512,6 +600,7 @@ class MainWindow(QMainWindow):
     def _abrir_settings(self) -> None:
         dlg = SettingsDialog(self.config_store, parent=self)
         dlg.exec()
+        self._refresh_alerta_token()
 
     def _sobre(self) -> None:
         from advbox_export import __version__

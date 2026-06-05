@@ -8,19 +8,27 @@ from pathlib import Path
 DEFAULT_BASE_URL = "https://app.advbox.com.br/api/v1"
 
 
+VALID_THEMES = ("light", "dark")
+
+
 @dataclass
 class Config:
     token: str = ""
     base_url: str = DEFAULT_BASE_URL
+    theme: str = "light"
 
     def to_dict(self) -> dict:
-        return {"token": self.token, "base_url": self.base_url}
+        return {"token": self.token, "base_url": self.base_url, "theme": self.theme}
 
     @classmethod
     def from_dict(cls, d: dict) -> "Config":
+        theme = d.get("theme") or "light"
+        if theme not in VALID_THEMES:
+            theme = "light"
         return cls(
             token=d.get("token", "") or "",
             base_url=d.get("base_url") or DEFAULT_BASE_URL,
+            theme=theme,
         )
 
 
