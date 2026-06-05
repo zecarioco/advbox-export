@@ -336,8 +336,8 @@ class MainWindow(QMainWindow):
             ["Data", "Período", "Total", "Status", "Duração", "Erro", "Ações"]
         )
         self.tabela.verticalHeader().setVisible(False)
-        self.tabela.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        self.tabela.verticalHeader().setMinimumSectionSize(48)
+        self.tabela.verticalHeader().setDefaultSectionSize(42)
+        self.tabela.verticalHeader().setMinimumSectionSize(42)
         self.tabela.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.tabela.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.tabela.setAlternatingRowColors(True)
@@ -571,10 +571,12 @@ class MainWindow(QMainWindow):
         w = QFrame()
         w.setFrameShape(QFrame.Shape.NoFrame)
         w.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        w.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        w.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        w.setFixedHeight(40)
         h = QHBoxLayout(w)
-        h.setContentsMargins(8, 8, 8, 8)
+        h.setContentsMargins(8, 6, 8, 6)
         h.setSpacing(6)
+        h.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
 
         for label, path in [
             ("XLSX", row.caminho_xlsx),
@@ -584,7 +586,8 @@ class MainWindow(QMainWindow):
             btn = QPushButton(label)
             btn.setProperty("variant", "outline-sm")
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+            btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            btn.setFixedHeight(26)
             existe = bool(path) and Path(path).exists() if path else False
             btn.setEnabled(existe)
             if path:

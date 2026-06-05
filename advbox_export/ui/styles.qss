@@ -191,11 +191,13 @@ QPushButton[variant="outline-sm"] {
     color: #1a2420;
     border: 1px solid #b9ccc1;
     border-radius: 6px;
-    padding: 6px 12px;
+    padding: 4px 10px;
     font-size: 12px;
     font-weight: 500;
-    min-height: 22px;
-    min-width: 56px;
+    min-height: 14px;
+    max-height: 26px;
+    min-width: 48px;
+    max-width: 64px;
 }
 QPushButton[variant="outline-sm"]:hover {
     background-color: #eef2ee;
