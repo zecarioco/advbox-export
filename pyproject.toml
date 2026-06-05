@@ -12,6 +12,11 @@ dependencies = [
     "platformdirs>=4.2",
 ]
 
+[project.optional-dependencies]
+build = [
+    "pyinstaller>=6.10",
+]
+
 [project.scripts]
 advbox-export = "advbox_export.main:main"
 
