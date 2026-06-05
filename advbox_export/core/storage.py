@@ -11,65 +11,164 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-# Colunas do XLSX/CSV, na ordem. Cada par (header_humano, getter).
+# Espelha as colunas do export do painel AdvBox.
 COLUNAS: list[tuple[str, str]] = [
-    ("ID", "id"),
-    ("Data", "date"),
-    ("Prazo", "date_deadline"),
-    ("Tarefa", "task"),
-    ("Recompensa", "reward"),
-    ("Observações", "notes"),
+    ("Prioridade", "_prioridade"),
+    ("Data", "_data"),
+    ("Hora", "_hora"),
+    ("Término", "_termino_data"),
+    ("Hora Término", "_termino_hora"),
+    ("Prazo fatal", "_prazo_fatal"),
+    ("Data Conclusão", "_data_conclusao"),
+    ("Pontuação", "reward"),
+    ("Compromisso", "task"),
     ("Local", "local"),
-    ("Processo ID", "lawsuits_id"),
-    ("Número do Processo", "_process_number"),
+    ("Remetente", "_remetente"),
+    ("Destinatário", "_destinatario"),
+    ("Partes", "_partes"),
+    ("Processo (CNJ)", "_process_number"),
     ("Protocolo", "_protocol_number"),
-    ("Cliente(s)", "_clientes"),
-    ("Responsável(is)", "_responsaveis"),
-    ("Importante", "_importante"),
-    ("Urgente", "_urgente"),
-    ("Concluída", "_concluida"),
-    ("Criada em", "created_at"),
+    ("Tipo de ação", "_tipo_acao"),
+    ("Observações", "notes"),
 ]
 
-# Incluídas só no XLSX (ocultas), pra você poder inspecionar atividades
-# suspeitas sem precisar abrir o JSONL bruto. Excluídas do CSV pra não poluir.
+# Ocultas no XLSX, fora do CSV. Servem pra você inspecionar atividades
+# atípicas sem precisar abrir o JSONL bruto.
 COLUNAS_DEBUG_XLSX: list[tuple[str, str]] = [
+    ("ID", "id"),
     ("Atividade (JSON bruto)", "_raw_atividade"),
     ("Lawsuit (JSON bruto)", "_raw_lawsuit"),
 ]
 
 
+_PRIORIDADES = {0: "BAIXA", 1: "NORMAL", 2: "ALTA", 3: "URGENTE"}
+
+
 def achatar_atividade(atividade: dict[str, Any]) -> dict[str, Any]:
-    """Achata uma atividade do /posts em campos planos pra planilha."""
+    """Achata uma atividade do /posts pros 17 campos do export do painel."""
     lawsuit = atividade.get("lawsuit") or {}
     customers = lawsuit.get("customers") or []
     users = atividade.get("users") or []
 
+    data, hora = _split_datetime(atividade.get("date"))
+    fim_data, fim_hora = _split_datetime(
+        atividade.get("end_date") or atividade.get("date_end")
+    )
     return {
         "id": atividade.get("id"),
-        "date": atividade.get("date"),
-        "date_deadline": atividade.get("date_deadline"),
-        "task": atividade.get("task"),
+        "_prioridade": _resolver_prioridade(atividade, users),
+        "_data": data,
+        "_hora": hora,
+        "_termino_data": fim_data,
+        "_termino_hora": fim_hora,
+        "_prazo_fatal": _formatar_data(atividade.get("date_deadline")),
+        "_data_conclusao": _resolver_data_conclusao(atividade, users),
         "reward": atividade.get("reward"),
-        "notes": atividade.get("notes"),
+        "task": atividade.get("task"),
         "local": atividade.get("local"),
-        "lawsuits_id": atividade.get("lawsuits_id"),
-        "created_at": atividade.get("created_at"),
+        "_remetente": _resolver_remetente(atividade),
+        "_destinatario": ", ".join(u.get("name", "") for u in users if u.get("name")),
+        "_partes": ", ".join(c.get("name", "") for c in customers if c.get("name")),
         "_process_number": lawsuit.get("process_number"),
         "_protocol_number": lawsuit.get("protocol_number"),
-        "_clientes": " | ".join(c.get("name", "") for c in customers if c.get("name")),
-        "_responsaveis": " | ".join(u.get("name", "") for u in users if u.get("name")),
-        "_importante": _flag_join(users, "important"),
-        "_urgente": _flag_join(users, "urgent"),
-        "_concluida": _flag_join(users, "completed"),
+        "_tipo_acao": _primeiro_nao_nulo(
+            atividade.get("tipo_acao"),
+            atividade.get("task_type"),
+            atividade.get("category"),
+            (atividade.get("type") or {}).get("name") if isinstance(atividade.get("type"), dict) else atividade.get("type"),
+        ),
+        "notes": atividade.get("notes"),
         "_raw_atividade": json.dumps(atividade, ensure_ascii=False),
         "_raw_lawsuit": json.dumps(lawsuit, ensure_ascii=False) if lawsuit else "",
     }
 
 
-def _flag_join(users: list[dict[str, Any]], key: str) -> str:
-    valores = [str(u.get(key)) for u in users if u.get(key) is not None]
-    return " | ".join(valores)
+def _split_datetime(raw: Any) -> tuple[str, str]:
+    """'2025-05-12 17:00:00' -> ('12/05/2025', '17:00'). Aceita também só data."""
+    if not raw or not isinstance(raw, str):
+        return "", ""
+    raw = raw.strip()
+    parte_data, _, parte_hora = raw.partition(" ")
+    if not parte_hora:
+        parte_data, _, parte_hora = raw.partition("T")
+    data_fmt = _formatar_data(parte_data)
+    hora_fmt = parte_hora[:5] if parte_hora else ""
+    return data_fmt, hora_fmt
+
+
+def _formatar_data(raw: Any) -> str:
+    """'2025-05-12' ou '2025-05-12 17:00:00' -> '12/05/2025'."""
+    if not raw or not isinstance(raw, str):
+        return ""
+    parte_data = raw[:10]
+    if len(parte_data) == 10 and parte_data[4] == "-" and parte_data[7] == "-":
+        return f"{parte_data[8:10]}/{parte_data[5:7]}/{parte_data[0:4]}"
+    return raw
+
+
+def _resolver_prioridade(atividade: dict[str, Any], users: list[dict[str, Any]]) -> str:
+    """Prioridade: tenta campo top-level, depois deriva das flags important/urgent."""
+    raw = atividade.get("priority")
+    if isinstance(raw, str) and raw:
+        return raw.upper()
+    if isinstance(raw, int) and raw in _PRIORIDADES:
+        return _PRIORIDADES[raw]
+    urgentes = sum(1 for u in users if u.get("urgent"))
+    importantes = sum(1 for u in users if u.get("important"))
+    if urgentes:
+        return "URGENTE"
+    if importantes:
+        return "ALTA"
+    return "NORMAL"
+
+
+def _resolver_data_conclusao(
+    atividade: dict[str, Any], users: list[dict[str, Any]]
+) -> str:
+    """Tenta campos top-level; senão pega o primeiro `users[].completed` parseável."""
+    for chave in ("completed_at", "completed_date", "date_completed"):
+        valor = atividade.get(chave)
+        if valor:
+            return _formatar_datetime(valor)
+    for u in users:
+        c = u.get("completed")
+        if c and isinstance(c, str) and len(c) >= 10:
+            return _formatar_datetime(c)
+    return ""
+
+
+def _formatar_datetime(raw: str) -> str:
+    """'2025-05-12 08:10:00' -> '12/05/2025 08:10'."""
+    data, hora = _split_datetime(raw)
+    if data and hora:
+        return f"{data} {hora}"
+    return data or hora or raw
+
+
+def _resolver_remetente(atividade: dict[str, Any]) -> str:
+    """Tenta vários campos comuns pra autor/criador. Vazio se nada bater."""
+    candidatos = (
+        atividade.get("sender"),
+        atividade.get("from"),
+        atividade.get("created_by_name"),
+        atividade.get("creator"),
+        atividade.get("user_name"),
+    )
+    for c in candidatos:
+        if isinstance(c, str) and c:
+            return c
+        if isinstance(c, dict):
+            nome = c.get("name") or c.get("nome")
+            if nome:
+                return nome
+    return ""
+
+
+def _primeiro_nao_nulo(*valores: Any) -> str:
+    for v in valores:
+        if v not in (None, ""):
+            return str(v)
+    return ""
 
 
 def gravar_jsonl_append(path: Path, atividades: Iterable[dict[str, Any]]) -> int:
@@ -117,8 +216,27 @@ def gerar_xlsx(jsonl_path: Path, xlsx_path: Path) -> int:
             ws.cell(row=row_idx, column=col_idx, value=achatada.get(key))
         row_idx += 1
 
-    larguras = [12, 20, 20, 30, 12, 50, 30, 12, 28, 18, 40, 40, 12, 10, 12, 20]
-    for i, w in enumerate(larguras, start=1):
+    larguras_visiveis = [
+        12,  # Prioridade
+        12,  # Data
+        10,  # Hora
+        12,  # Término
+        14,  # Hora Término
+        14,  # Prazo fatal
+        20,  # Data Conclusão
+        12,  # Pontuação
+        36,  # Compromisso
+        18,  # Local
+        28,  # Remetente
+        28,  # Destinatário
+        36,  # Partes
+        26,  # Processo (CNJ)
+        18,  # Protocolo
+        26,  # Tipo de ação
+        48,  # Observações
+    ]
+    larguras_debug = [12, 80, 80]  # ID, Atividade bruta, Lawsuit bruto
+    for i, w in enumerate(larguras_visiveis + larguras_debug, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
     # colunas de debug: largas (caso desoculte) e ocultas por padrão
