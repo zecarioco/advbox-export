@@ -223,6 +223,19 @@ QPushButton[variant="outline-sm-danger"]:hover {
     border-color: #e85555;
 }
 
+/* Botão lixeira: só ícone */
+QPushButton[variant="trash"] {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 4px;
+    qproperty-iconSize: 16px 16px;
+}
+QPushButton[variant="trash"]:hover {
+    background-color: #2a1a1a;
+    border-color: #553030;
+}
+
 /* ---------- Inputs ---------- */
 QLineEdit,
 QDateEdit,

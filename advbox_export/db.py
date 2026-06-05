@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS exports (
     criado_em TEXT NOT NULL,
     periodo_inicio TEXT NOT NULL,
     periodo_fim TEXT NOT NULL,
+    nome TEXT,
     status TEXT NOT NULL,
     total_registros INTEGER,
     caminho_xlsx TEXT,
@@ -46,6 +47,7 @@ class ExportRow:
     duracao_segundos: Optional[float]
     erro_mensagem: Optional[str]
     finalizado_em: Optional[str]
+    nome: Optional[str] = None
 
 
 class ExportRepository:
@@ -54,6 +56,14 @@ class ExportRepository:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._conn() as conn:
             conn.executescript(SCHEMA)
+            self._migrate(conn)
+
+    @staticmethod
+    def _migrate(conn: sqlite3.Connection) -> None:
+        """ALTER TABLE pra colunas adicionadas após v0.1 (sqlite não tem IF NOT EXISTS pra ADD COLUMN)."""
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(exports)").fetchall()}
+        if "nome" not in cols:
+            conn.execute("ALTER TABLE exports ADD COLUMN nome TEXT")
 
     @contextmanager
     def _conn(self) -> Iterator[sqlite3.Connection]:
@@ -65,15 +75,15 @@ class ExportRepository:
         finally:
             conn.close()
 
-    def criar(self, periodo_inicio: str, periodo_fim: str) -> int:
+    def criar(self, periodo_inicio: str, periodo_fim: str, nome: str) -> int:
         agora = datetime.now().isoformat(timespec="seconds")
         with self._conn() as conn:
             cur = conn.execute(
                 """
-                INSERT INTO exports (criado_em, periodo_inicio, periodo_fim, status)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO exports (criado_em, periodo_inicio, periodo_fim, nome, status)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (agora, periodo_inicio, periodo_fim, STATUS_EM_ANDAMENTO),
+                (agora, periodo_inicio, periodo_fim, nome, STATUS_EM_ANDAMENTO),
             )
             return int(cur.lastrowid)
 

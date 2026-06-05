@@ -39,6 +39,7 @@ class ExportWorker(QObject):
         state_dir: Path,
         date_from: date,
         date_to: date,
+        nome: str,
     ) -> None:
         super().__init__()
         self._client = client
@@ -47,6 +48,7 @@ class ExportWorker(QObject):
         self._state_dir = state_dir
         self._date_from = date_from
         self._date_to = date_to
+        self._nome = nome
         self._stop_requested = False
         self._log_buffer = io.StringIO()
         self._export_id: int | None = None
@@ -62,6 +64,7 @@ class ExportWorker(QObject):
         self._export_id = self._repository.criar(
             periodo_inicio=self._date_from.isoformat(),
             periodo_fim=self._date_to.isoformat(),
+            nome=self._nome,
         )
 
         exporter = Exporter(

@@ -48,6 +48,7 @@ def _injetar_paths_de_icones(qss: str, *, theme: str) -> str:
         "{{CHEVRON_DOWN}}": icons_dir / f"chevron-down-{sufixo}.svg",
         "{{CHEVRON_LEFT}}": icons_dir / f"chevron-left-{sufixo}.svg",
         "{{CHEVRON_RIGHT}}": icons_dir / f"chevron-right-{sufixo}.svg",
+        "{{TRASH}}": icons_dir / f"trash-{sufixo}.svg",
     }
     for placeholder, path in substituicoes.items():
         qss = qss.replace(placeholder, str(path).replace("\\", "/"))

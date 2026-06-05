@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
@@ -37,6 +38,7 @@ from advbox_export.core.paths import (
     exports_dir,
     state_dir,
 )
+from advbox_export.ui.theme import _RES_DIR
 from advbox_export.core.worker import ExportWorker
 from advbox_export.db import (
     STATUS_CANCELADO,
@@ -186,6 +188,15 @@ class MainWindow(QMainWindow):
     def _build_card_novo_export(self) -> Card:
         card = Card("Novo export")
 
+        nome_label = QLabel("NOME DO EXPORT")
+        nome_label.setObjectName("sectionLabel")
+        card.add(nome_label)
+
+        self.input_nome = QLineEdit()
+        self.input_nome.setPlaceholderText("Ex: Atividades maio 2026")
+        self.input_nome.setMaxLength(80)
+        card.add(self.input_nome)
+
         atalhos_label = QLabel("ATALHOS DE PERÍODO")
         atalhos_label.setObjectName("sectionLabel")
         card.add(atalhos_label)
@@ -333,7 +344,7 @@ class MainWindow(QMainWindow):
 
         self.tabela = QTableWidget(0, 7)
         self.tabela.setHorizontalHeaderLabels(
-            ["Data", "Período", "Total", "Status", "Duração", "Erro", "Ações"]
+            ["Data", "Nome", "Período", "Total", "Status", "Duração", "Ações"]
         )
         self.tabela.verticalHeader().setVisible(False)
         self.tabela.verticalHeader().setDefaultSectionSize(42)
@@ -344,13 +355,13 @@ class MainWindow(QMainWindow):
         self.tabela.setShowGrid(False)
         header = self.tabela.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-        header.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.tabela.setColumnWidth(0, 150)
-        self.tabela.setColumnWidth(1, 230)
-        self.tabela.setColumnWidth(2, 90)
-        self.tabela.setColumnWidth(3, 110)
-        self.tabela.setColumnWidth(4, 90)
-        self.tabela.setColumnWidth(6, 300)
+        self.tabela.setColumnWidth(2, 230)
+        self.tabela.setColumnWidth(3, 90)
+        self.tabela.setColumnWidth(4, 120)
+        self.tabela.setColumnWidth(5, 90)
+        self.tabela.setColumnWidth(6, 280)
         self.tabela.setMinimumHeight(320)
         card.add(self.tabela)
 
@@ -424,6 +435,16 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Erro", str(e))
             return
 
+        nome = self.input_nome.text().strip()
+        if not nome:
+            QMessageBox.warning(
+                self,
+                "Nome obrigatório",
+                "Dê um nome ao export antes de iniciar (ex: 'Atividades maio 2026').",
+            )
+            self.input_nome.setFocus()
+            return
+
         date_from = self.input_de.date().toPython()
         date_to = self.input_ate.date().toPython()
         if date_to < date_from:
@@ -439,6 +460,7 @@ class MainWindow(QMainWindow):
             state_dir=state_dir(),
             date_from=date_from,
             date_to=date_to,
+            nome=nome,
         )
         self._thread = QThread(self)
         self._worker.moveToThread(self._thread)
@@ -547,16 +569,18 @@ class MainWindow(QMainWindow):
         duracao = (
             f"{row.duracao_segundos:.0f}s" if row.duracao_segundos is not None else ""
         )
-        erro = row.erro_mensagem or ""
 
         self.tabela.setItem(i, 0, QTableWidgetItem(data_fmt))
-        self.tabela.setItem(i, 1, QTableWidgetItem(periodo))
+        self.tabela.setItem(i, 1, QTableWidgetItem(row.nome or "—"))
+        self.tabela.setItem(i, 2, QTableWidgetItem(periodo))
         item_total = QTableWidgetItem(total)
         item_total.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.tabela.setItem(i, 2, item_total)
-        self.tabela.setItem(i, 3, QTableWidgetItem(status))
-        self.tabela.setItem(i, 4, QTableWidgetItem(duracao))
-        self.tabela.setItem(i, 5, QTableWidgetItem(erro))
+        self.tabela.setItem(i, 3, item_total)
+        item_status = QTableWidgetItem(status)
+        if row.erro_mensagem:
+            item_status.setToolTip(row.erro_mensagem)
+        self.tabela.setItem(i, 4, item_status)
+        self.tabela.setItem(i, 5, QTableWidgetItem(duracao))
         self.tabela.setCellWidget(i, 6, self._build_acoes_widget(row))
 
     @staticmethod
@@ -594,15 +618,21 @@ class MainWindow(QMainWindow):
                 btn.clicked.connect(lambda _checked=False, p=path: self._abrir_arquivo(p))
             h.addWidget(btn, 0, Qt.AlignmentFlag.AlignVCenter)
 
-        btn_del = QPushButton("Excluir")
-        btn_del.setProperty("variant", "outline-sm-danger")
+        h.addStretch(1)
+
+        btn_del = QPushButton()
+        btn_del.setProperty("variant", "trash")
         btn_del.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_del.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        btn_del.setFixedSize(64, 26)
+        btn_del.setFixedSize(30, 30)
+        btn_del.setToolTip("Excluir este export")
+        sufixo = "dark" if self.config_store.load().theme == "dark" else "light"
+        icone_path = _RES_DIR / "icons" / f"trash-{sufixo}.svg"
+        if icone_path.exists():
+            btn_del.setIcon(QIcon(str(icone_path)))
         btn_del.clicked.connect(lambda _checked=False, eid=row.id: self._deletar_registro(eid))
         h.addWidget(btn_del, 0, Qt.AlignmentFlag.AlignVCenter)
 
-        h.addStretch(1)
         return w
 
     def _deletar_registro(self, export_id: int) -> None:

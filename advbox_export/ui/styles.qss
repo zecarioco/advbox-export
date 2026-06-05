@@ -224,6 +224,19 @@ QPushButton[variant="outline-sm-danger"]:hover {
     border-color: #d93a3a;
 }
 
+/* Botão lixeira: só ícone, fundo transparente */
+QPushButton[variant="trash"] {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 4px;
+    qproperty-iconSize: 16px 16px;
+}
+QPushButton[variant="trash"]:hover {
+    background-color: #fdecec;
+    border-color: #f5b8b8;
+}
+
 /* Banner de alerta (token ausente, avisos importantes) */
 QFrame#alertCard {
     background-color: #fff8eb;
