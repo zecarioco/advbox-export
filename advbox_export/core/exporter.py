@@ -149,6 +149,8 @@ class Exporter:
         self.exports_dir.mkdir(parents=True, exist_ok=True)
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self._chaves_logadas = False
+        # cache: lawsuit_id -> {(task, start): author}
+        self._historico_cache: dict[int, dict[tuple[str, str], str]] = {}
 
     def _state_path(self, slug: str) -> Path:
         return self.state_dir / f"{slug}.json"
@@ -283,6 +285,64 @@ class Exporter:
             periodo_fim=date_to,
         )
 
+    def _enriquecer_com_author(self, batch: list[dict], log: LogCallback) -> None:
+        """Injeta __author__ em cada atividade, buscando em /history/{lawsuit_id}.
+
+        Cacheia por lawsuit_id pra não fazer GET repetido. Cada lookup novo
+        custa 1 request (e ~2.1s pelo rate limit), então pra 45k tarefas
+        distribuídas em N processos únicos, o overhead total ≈ N × 2.1s.
+        """
+        ids_novos: list[int] = []
+        for a in batch:
+            lid = a.get("lawsuits_id")
+            if isinstance(lid, int) and lid not in self._historico_cache:
+                if lid not in ids_novos:
+                    ids_novos.append(lid)
+
+        if ids_novos:
+            log(
+                "INFO",
+                f"  buscando histórico de {len(ids_novos)} processo(s) novo(s) "
+                f"para preencher Remetente (~{len(ids_novos) * 2.1:.0f}s)",
+            )
+
+        for lid in ids_novos:
+            try:
+                resposta = self.client.get_history(lid)
+                self._historico_cache[lid] = self._build_history_map(resposta)
+            except Exception as exc:
+                log("WARN", f"falha em /history/{lid}: {exc} — Remetente ficará vazio")
+                self._historico_cache[lid] = {}
+
+        for a in batch:
+            lid = a.get("lawsuits_id")
+            if not isinstance(lid, int):
+                continue
+            cache = self._historico_cache.get(lid, {})
+            chave = (a.get("task") or "", a.get("date") or "")
+            author = cache.get(chave)
+            if author:
+                a["__author__"] = author
+
+    @staticmethod
+    def _build_history_map(resposta: object) -> dict[tuple[str, str], str]:
+        """Constrói {(task, start): author} a partir da resposta do /history."""
+        if not isinstance(resposta, dict):
+            return {}
+        items = resposta.get("data") or []
+        if not isinstance(items, list):
+            return {}
+        mapa: dict[tuple[str, str], str] = {}
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            author = item.get("author")
+            if not author:
+                continue
+            chave = (item.get("task") or "", item.get("start") or "")
+            mapa[chave] = author
+        return mapa
+
     def _auditar_chaves(self, batch: list[dict], log: LogCallback) -> None:
         """Loga 1 vez por export se aparecerem campos não previstos em CHAVES_ATIVIDADE_CONHECIDAS.
 
@@ -354,6 +414,7 @@ class Exporter:
                     log("INFO", f"  totalCount da janela {janela.label()}: {total_count}")
 
             self._auditar_chaves(data, log)
+            self._enriquecer_com_author(data, log)
 
             gravados = gravar_jsonl_append(jsonl_path, data)
             offset += len(data)

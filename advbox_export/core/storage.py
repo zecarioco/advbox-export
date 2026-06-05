@@ -69,14 +69,17 @@ def achatar_atividade(atividade: dict[str, Any]) -> dict[str, Any]:
         "reward": atividade.get("reward"),
         "task": atividade.get("task"),
         "local": atividade.get("local"),
-        "_remetente": "",
+        "_remetente": atividade.get("__author__") or "",
         "_destinatario": ", ".join(u.get("name", "") for u in users if u.get("name")),
         "_partes": ", ".join(c.get("name", "") for c in customers if c.get("name")),
         "_process_number": lawsuit.get("process_number"),
         "_protocol_number": lawsuit.get("protocol_number"),
         "_tipo_acao": "",
         "notes": atividade.get("notes"),
-        "_raw_atividade": json.dumps(atividade, ensure_ascii=False),
+        "_raw_atividade": json.dumps(
+            {k: v for k, v in atividade.items() if not k.startswith("__")},
+            ensure_ascii=False,
+        ),
         "_raw_lawsuit": json.dumps(lawsuit, ensure_ascii=False) if lawsuit else "",
     }
 

@@ -201,3 +201,14 @@ class AdvboxClient:
                 )
 
         return self._get("/posts", params)
+
+    def get_history(self, lawsuit_id: int, status: str | None = None) -> Any:
+        """GET /history/{lawsuit_id} — retorna tarefas com author/responsible.
+
+        Útil pra cruzar com /posts e preencher Remetente. status="all" (default),
+        "pending" ou "completed". A API ignora limit/offset aqui.
+        """
+        params: dict[str, Any] = {}
+        if status:
+            params["status"] = status
+        return self._get(f"/history/{lawsuit_id}", params)
