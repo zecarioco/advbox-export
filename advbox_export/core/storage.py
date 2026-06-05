@@ -59,7 +59,7 @@ def achatar_atividade(atividade: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "id": atividade.get("id"),
-        "_prioridade": "NORMAL",
+        "_prioridade": _prioridade_agregada(users),
         "_data": data,
         "_hora": hora,
         "_termino_data": fim_data,
@@ -88,6 +88,20 @@ def _primeira_data_conclusao(users: list[dict[str, Any]]) -> str:
         if c and isinstance(c, str):
             return c
     return ""
+
+
+def _prioridade_agregada(users: list[dict[str, Any]]) -> str:
+    """Agrega as flags por usuário em um nível único de prioridade.
+
+    Qualquer responsável com urgent=1 → URGENTE.
+    Senão, qualquer com important=1 → ALTA.
+    Senão → NORMAL.
+    """
+    if any(u.get("urgent") for u in users):
+        return "URGENTE"
+    if any(u.get("important") for u in users):
+        return "ALTA"
+    return "NORMAL"
 
 
 def _split_datetime(raw: Any) -> tuple[str, str]:
