@@ -574,10 +574,10 @@ class MainWindow(QMainWindow):
         w.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         w.setFixedHeight(40)
         h = QHBoxLayout(w)
-        h.setContentsMargins(8, 6, 8, 6)
+        h.setContentsMargins(0, 0, 0, 0)
         h.setSpacing(6)
-        h.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
+        h.addStretch(1)
         for label, path in [
             ("XLSX", row.caminho_xlsx),
             ("CSV", row.caminho_csv),
@@ -587,12 +587,13 @@ class MainWindow(QMainWindow):
             btn.setProperty("variant", "outline-sm")
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-            btn.setFixedHeight(26)
+            btn.setFixedSize(58, 26)
             existe = bool(path) and Path(path).exists() if path else False
             btn.setEnabled(existe)
             if path:
                 btn.clicked.connect(lambda _checked=False, p=path: self._abrir_arquivo(p))
-            h.addWidget(btn)
+            h.addWidget(btn, 0, Qt.AlignmentFlag.AlignVCenter)
+        h.addStretch(1)
 
         return w
 
