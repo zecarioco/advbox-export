@@ -189,3 +189,7 @@ class ExportRepository:
                 "SELECT * FROM exports WHERE id = ?", (export_id,)
             ).fetchone()
         return ExportRow(**dict(row)) if row else None
+
+    def remover(self, export_id: int) -> None:
+        with self._conn() as conn:
+            conn.execute("DELETE FROM exports WHERE id = ?", (export_id,))

@@ -209,6 +209,20 @@ QPushButton[variant="outline-sm"]:disabled {
     border-color: #1f2c25;
 }
 
+QPushButton[variant="outline-sm-danger"] {
+    background-color: transparent;
+    color: #e85555;
+    border: 1px solid #553030;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+}
+QPushButton[variant="outline-sm-danger"]:hover {
+    background-color: #2a1a1a;
+    border-color: #e85555;
+}
+
 /* ---------- Inputs ---------- */
 QLineEdit,
 QDateEdit,

@@ -350,7 +350,7 @@ class MainWindow(QMainWindow):
         self.tabela.setColumnWidth(2, 90)
         self.tabela.setColumnWidth(3, 110)
         self.tabela.setColumnWidth(4, 90)
-        self.tabela.setColumnWidth(6, 230)
+        self.tabela.setColumnWidth(6, 300)
         self.tabela.setMinimumHeight(320)
         card.add(self.tabela)
 
@@ -587,15 +587,49 @@ class MainWindow(QMainWindow):
             btn.setProperty("variant", "outline-sm")
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-            btn.setFixedSize(58, 26)
+            btn.setFixedSize(54, 26)
             existe = bool(path) and Path(path).exists() if path else False
             btn.setEnabled(existe)
             if path:
                 btn.clicked.connect(lambda _checked=False, p=path: self._abrir_arquivo(p))
             h.addWidget(btn, 0, Qt.AlignmentFlag.AlignVCenter)
-        h.addStretch(1)
 
+        btn_del = QPushButton("Excluir")
+        btn_del.setProperty("variant", "outline-sm-danger")
+        btn_del.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_del.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        btn_del.setFixedSize(64, 26)
+        btn_del.clicked.connect(lambda _checked=False, eid=row.id: self._deletar_registro(eid))
+        h.addWidget(btn_del, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        h.addStretch(1)
         return w
+
+    def _deletar_registro(self, export_id: int) -> None:
+        row = self.repository.obter(export_id)
+        if row is None:
+            return
+        resposta = QMessageBox.question(
+            self,
+            "Excluir export",
+            f"Excluir o export de {row.periodo_inicio} → {row.periodo_fim}?\n\n"
+            "O registro do histórico e os arquivos (XLSX, CSV, log) vão ser removidos.\n"
+            "Esta ação não pode ser desfeita.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if resposta != QMessageBox.StandardButton.Yes:
+            return
+
+        for caminho in (row.caminho_xlsx, row.caminho_csv, row.caminho_log):
+            if caminho:
+                try:
+                    Path(caminho).unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+        self.repository.remover(export_id)
+        self._refresh_historico()
 
     def _abrir_arquivo(self, caminho: str) -> None:
         p = Path(caminho)

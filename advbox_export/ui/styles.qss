@@ -210,6 +210,20 @@ QPushButton[variant="outline-sm"]:disabled {
     border-color: #eef2ee;
 }
 
+QPushButton[variant="outline-sm-danger"] {
+    background-color: #ffffff;
+    color: #d93a3a;
+    border: 1px solid #f5b8b8;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+}
+QPushButton[variant="outline-sm-danger"]:hover {
+    background-color: #fdecec;
+    border-color: #d93a3a;
+}
+
 /* Banner de alerta (token ausente, avisos importantes) */
 QFrame#alertCard {
     background-color: #fff8eb;
