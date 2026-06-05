@@ -717,18 +717,54 @@ class MainWindow(QMainWindow):
     # ---- Cleanup ao fechar -------------------------------------------------
 
     def closeEvent(self, event) -> None:
-        if self._worker is not None:
-            reply = QMessageBox.question(
-                self,
-                "Export em andamento",
-                "Há um export em andamento. Cancelar e sair?\n"
-                "(O progresso atual fica salvo e você pode retomar depois.)",
-            )
-            if reply != QMessageBox.StandardButton.Yes:
-                event.ignore()
-                return
-            self._worker.request_stop()
-            if self._thread is not None:
-                self._thread.quit()
-                self._thread.wait(3000)
+        if self._worker is None:
+            event.accept()
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Export em andamento",
+            "Há um export em andamento. Cancelar e sair?\n\n"
+            "O progresso fica salvo e você pode retomar o mesmo período depois. "
+            "Pode levar até ~60s para o cancelamento ser confirmado "
+            "(se estiver esperando rate limit).",
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            event.ignore()
+            return
+
+        worker = self._worker
+        thread = self._thread
+        export_id = worker._export_id
+
+        worker.request_stop()
+
+        if thread is not None and thread.isRunning():
+            QApplication.processEvents()
+            thread.quit()
+            # 70s cobre o pior caso: 60s de espera por 429 + margem
+            if not thread.wait(70_000):
+                forcar = QMessageBox.warning(
+                    self,
+                    "Export não respondeu",
+                    "O export ainda está rodando após 70s. "
+                    "Forçar fechamento pode deixar a última página sem gravar "
+                    "(mas a retomada vai pular o que já foi salvo).\n\n"
+                    "Forçar fechamento mesmo assim?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if forcar != QMessageBox.StandardButton.Yes:
+                    event.ignore()
+                    return
+
+        # Garante que o registro não fica eternamente "Em andamento"
+        if export_id is not None:
+            try:
+                linha = self.repository.obter(export_id)
+                if linha and linha.status == STATUS_EM_ANDAMENTO:
+                    self.repository.marcar_cancelado(export_id)
+            except Exception:
+                pass
+
         event.accept()
