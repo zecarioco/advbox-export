@@ -157,10 +157,10 @@ class Exporter:
         self._historico_cache: dict[int, dict[tuple[str, str], str]] = {}
         # cache: lawsuit_id -> {type, group, stage, responsible, ...}
         self._lawsuit_cache: dict[int, dict] = {}
-        # Flags ativadas pelo caller pra incluir lookups extras (custam +1 req
-        # por processo único). Setadas via `run()`.
+        # Flags ativadas pelo caller via `run()`.
         self._incluir_remetente = False
         self._incluir_dados_processo = False
+        self._incluir_comentarios = False
 
     def _state_path(self, slug: str) -> Path:
         return self.state_dir / f"{slug}.json"
@@ -189,9 +189,11 @@ class Exporter:
         should_stop: StopChecker | None = None,
         incluir_remetente: bool = False,
         incluir_dados_processo: bool = False,
+        incluir_comentarios: bool = False,
     ) -> ExportResult:
         self._incluir_remetente = incluir_remetente
         self._incluir_dados_processo = incluir_dados_processo
+        self._incluir_comentarios = incluir_comentarios
         log = log_cb or (lambda lvl, msg: logger.log(getattr(logging, lvl, logging.INFO), msg))
         emit = progress_cb or (lambda p: None)
         stop = should_stop or (lambda: False)
@@ -494,12 +496,25 @@ class Exporter:
             data_filtrada = [
                 a for a in data if a.get("task") != TASK_ALERTA_EXCLUIDA
             ]
-            descartadas = total_recebido - len(data_filtrada)
-            if descartadas:
+            descartadas_alerta = total_recebido - len(data_filtrada)
+            if descartadas_alerta:
                 log(
                     "INFO",
-                    f"  descartadas {descartadas} entrada(s) de '{TASK_ALERTA_EXCLUIDA}'",
+                    f"  descartadas {descartadas_alerta} entrada(s) de '{TASK_ALERTA_EXCLUIDA}'",
                 )
+
+            if not self._incluir_comentarios:
+                antes = len(data_filtrada)
+                data_filtrada = [
+                    a for a in data_filtrada if (a.get("reward") or 0) > 0
+                ]
+                descartadas_comentario = antes - len(data_filtrada)
+                if descartadas_comentario:
+                    log(
+                        "INFO",
+                        f"  descartadas {descartadas_comentario} entrada(s) sem pontuação "
+                        f"(comentários internos — marque 'Incluir comentários' pra incluir)",
+                    )
 
             if self._incluir_remetente:
                 self._enriquecer_com_author(data_filtrada, log, stop)

@@ -268,6 +268,15 @@ class MainWindow(QMainWindow):
         )
         card.add(self.chk_dados_processo)
 
+        self.chk_comentarios = QCheckBox(
+            "Incluir comentários internos (tarefas sem pontuação)"
+        )
+        self.chk_comentarios.setToolTip(
+            "Quando desmarcado, descarta tarefas com reward=0 (comentários "
+            "internos do escritório). O painel da AdvBox tampouco mostra essas."
+        )
+        card.add(self.chk_comentarios)
+
         self.btn_exportar = QPushButton("Exportar agora")
         self.btn_exportar.setMinimumHeight(40)
         self.btn_exportar.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -499,6 +508,7 @@ class MainWindow(QMainWindow):
             nome=nome,
             incluir_remetente=self.chk_remetente.isChecked(),
             incluir_dados_processo=self.chk_dados_processo.isChecked(),
+            incluir_comentarios=self.chk_comentarios.isChecked(),
         )
         self._thread = QThread(self)
         self._worker.moveToThread(self._thread)
