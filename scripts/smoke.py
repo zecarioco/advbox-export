@@ -38,7 +38,15 @@ def main() -> int:
     print()
 
     client = AdvboxClient(token=cfg.token, base_url=cfg.base_url)
-    resposta = client.list_atividades(limit=5, offset=0)
+    # Filtra por maio/2025 — período da planilha do painel que tem atividades
+    # reais com hora marcada (ex: AGENDAR REUNIÃO 17:00). Sem filtro, o offset 0
+    # vem dominado por "ALERTA DE TAREFA EXCLUÍDA" recentes.
+    resposta = client.list_atividades(
+        limit=1000,
+        offset=0,
+        created_start="2025-05-01",
+        created_end="2025-05-31",
+    )
 
     if not isinstance(resposta, dict):
         print(f"ERRO: resposta não é dict (tipo {type(resposta).__name__})")
@@ -50,6 +58,8 @@ def main() -> int:
     print(f"limit              : {resposta.get('limit')}")
     print(f"offset             : {resposta.get('offset')}")
     print(f"len(data)          : {len(resposta.get('data', []))}")
+    if "query" in resposta:
+        print(f"query              : {json.dumps(resposta['query'], ensure_ascii=False)[:300]}")
     print()
 
     data = resposta.get("data", [])
@@ -68,7 +78,46 @@ def main() -> int:
     print(f"campos esperados ausentes      : {ausentes}")
     print()
 
-    primeira = data[0]
+    # Filtra atividades reais (descarta "ALERTA DE TAREFA EXCLUÍDA" e similares com date null)
+    reais = [a for a in data if a.get("date")]
+    print(f"--- {len(reais)} atividades REAIS (de {len(data)}, descartando date=null/excluídas) ---")
+    print()
+
+    # --- distribuição de horas no campo `date` ---
+    from collections import Counter
+    horas = Counter()
+    horas_nao_zero_exemplos: list[dict] = []
+    for a in reais:
+        d = a.get("date") or ""
+        if " " in d:
+            hora = d.split(" ", 1)[1][:5]
+        elif "T" in d:
+            hora = d.split("T", 1)[1][:5]
+        else:
+            hora = ""
+        horas[hora] += 1
+        if hora and hora != "00:00" and len(horas_nao_zero_exemplos) < 5:
+            horas_nao_zero_exemplos.append({
+                "id": a.get("id"),
+                "date": a.get("date"),
+                "task": a.get("task"),
+            })
+
+    print("--- distribuição de horas no campo `date` (atividades reais) ---")
+    for hora, n in horas.most_common(10):
+        print(f"  {hora!r}: {n}")
+    print()
+    if horas_nao_zero_exemplos:
+        print(f"--- {len(horas_nao_zero_exemplos)} exemplos de atividade com hora real ---")
+        for ex in horas_nao_zero_exemplos:
+            print(f"  id={ex['id']}, date={ex['date']!r}, task={ex['task']!r}")
+    else:
+        print("(NENHUMA das atividades reais teve hora não-zero em `date`)")
+    print()
+
+    if not reais:
+        return 0
+    primeira = reais[0]
     print("--- primeira atividade (cru) ---")
     print(json.dumps(primeira, indent=2, ensure_ascii=False))
     print()

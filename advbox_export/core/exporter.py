@@ -24,6 +24,10 @@ logger = logging.getLogger(__name__)
 PAGE_SIZE = 1000
 STATE_VERSION = 1
 
+# Atividades com este `task` são logs internos da AdvBox (exclusões de tarefas).
+# Vêm com tudo null (date, lawsuits_id, lawsuit, etc) e não aparecem no painel.
+TASK_ALERTA_EXCLUIDA = "ALERTA DE TAREFA EXCLUÍDA"
+
 CHAVES_ATIVIDADE_CONHECIDAS = {
     "id",
     "date",
@@ -424,10 +428,22 @@ class Exporter:
                     log("INFO", f"  totalCount da janela {janela.label()}: {total_count}")
 
             self._auditar_chaves(data, log)
-            self._enriquecer_com_author(data, log, stop)
 
-            gravados = gravar_jsonl_append(jsonl_path, data)
-            offset += len(data)
+            total_recebido = len(data)
+            data_filtrada = [
+                a for a in data if a.get("task") != TASK_ALERTA_EXCLUIDA
+            ]
+            descartadas = total_recebido - len(data_filtrada)
+            if descartadas:
+                log(
+                    "INFO",
+                    f"  descartadas {descartadas} entrada(s) de '{TASK_ALERTA_EXCLUIDA}'",
+                )
+
+            self._enriquecer_com_author(data_filtrada, log, stop)
+
+            gravados = gravar_jsonl_append(jsonl_path, data_filtrada)
+            offset += total_recebido  # offset segue baseado no que a API entregou
             state.offset_atual = offset
             state.total_baixado += gravados
             self._salvar_state(state_path, state)
