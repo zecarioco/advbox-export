@@ -30,6 +30,10 @@ COLUNAS: list[tuple[str, str]] = [
     ("Protocolo", "_protocol_number"),
     ("Tipo de ação", "_tipo_acao"),
     ("Observações", "notes"),
+    ("Tipo do processo", "_processo_tipo"),
+    ("Grupo do processo", "_processo_grupo"),
+    ("Fase do processo", "_processo_fase"),
+    ("Responsável do processo", "_processo_responsavel"),
 ]
 
 # Ocultas no XLSX, fora do CSV. Servem pra você inspecionar atividades
@@ -76,6 +80,10 @@ def achatar_atividade(atividade: dict[str, Any]) -> dict[str, Any]:
         "_protocol_number": lawsuit.get("protocol_number"),
         "_tipo_acao": "",
         "notes": atividade.get("notes"),
+        "_processo_tipo": (atividade.get("__lawsuit_extra__") or {}).get("type") or "",
+        "_processo_grupo": (atividade.get("__lawsuit_extra__") or {}).get("group") or "",
+        "_processo_fase": (atividade.get("__lawsuit_extra__") or {}).get("stage") or "",
+        "_processo_responsavel": (atividade.get("__lawsuit_extra__") or {}).get("responsible") or "",
         "_raw_atividade": json.dumps(
             {k: v for k, v in atividade.items() if not k.startswith("__")},
             ensure_ascii=False,
@@ -193,6 +201,10 @@ def gerar_xlsx(jsonl_path: Path, xlsx_path: Path) -> int:
         18,  # Protocolo
         26,  # Tipo de ação
         48,  # Observações
+        24,  # Tipo do processo
+        20,  # Grupo do processo
+        22,  # Fase do processo
+        24,  # Responsável do processo
     ]
     larguras_debug = [12, 80, 80]  # ID, Atividade bruta, Lawsuit bruto
     for i, w in enumerate(larguras_visiveis + larguras_debug, start=1):

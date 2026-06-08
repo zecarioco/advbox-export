@@ -155,6 +155,12 @@ class Exporter:
         self._chaves_logadas = False
         # cache: lawsuit_id -> {(task, start): author}
         self._historico_cache: dict[int, dict[tuple[str, str], str]] = {}
+        # cache: lawsuit_id -> {type, group, stage, responsible, ...}
+        self._lawsuit_cache: dict[int, dict] = {}
+        # Flags ativadas pelo caller pra incluir lookups extras (custam +1 req
+        # por processo único). Setadas via `run()`.
+        self._incluir_remetente = False
+        self._incluir_dados_processo = False
 
     def _state_path(self, slug: str) -> Path:
         return self.state_dir / f"{slug}.json"
@@ -181,7 +187,11 @@ class Exporter:
         progress_cb: ProgressCallback | None = None,
         log_cb: LogCallback | None = None,
         should_stop: StopChecker | None = None,
+        incluir_remetente: bool = False,
+        incluir_dados_processo: bool = False,
     ) -> ExportResult:
+        self._incluir_remetente = incluir_remetente
+        self._incluir_dados_processo = incluir_dados_processo
         log = log_cb or (lambda lvl, msg: logger.log(getattr(logging, lvl, logging.INFO), msg))
         emit = progress_cb or (lambda p: None)
         stop = should_stop or (lambda: False)
@@ -338,6 +348,57 @@ class Exporter:
             if author:
                 a["__author__"] = author
 
+    def _enriquecer_com_dados_processo(
+        self,
+        batch: list[dict],
+        log: LogCallback,
+        stop: StopChecker,
+    ) -> None:
+        """Injeta __lawsuit_extra__ em cada atividade com lawsuits_id.
+
+        Busca /lawsuits/{id} pra cada processo único e cacheia. Mesma estratégia
+        de cancelamento e cache parcial do enriquecimento de Remetente.
+        """
+        ids_novos: list[int] = []
+        for a in batch:
+            lid = a.get("lawsuits_id")
+            if isinstance(lid, int) and lid not in self._lawsuit_cache:
+                if lid not in ids_novos:
+                    ids_novos.append(lid)
+
+        if ids_novos:
+            log(
+                "INFO",
+                f"  buscando dados de {len(ids_novos)} processo(s) novo(s) "
+                f"(tipo/fase/responsável, ~{len(ids_novos) * 2.1:.0f}s)",
+            )
+
+        for lid in ids_novos:
+            if stop():
+                raise ExportCancelado()
+            try:
+                resposta = self.client.get_lawsuit(lid)
+                if isinstance(resposta, dict):
+                    self._lawsuit_cache[lid] = {
+                        "type": resposta.get("type") or "",
+                        "group": resposta.get("group") or "",
+                        "stage": resposta.get("stage") or "",
+                        "responsible": resposta.get("responsible") or "",
+                    }
+                else:
+                    self._lawsuit_cache[lid] = {}
+            except Exception as exc:
+                log("WARN", f"falha em /lawsuits/{lid}: {exc} — dados do processo ficarão vazios")
+                self._lawsuit_cache[lid] = {}
+
+        for a in batch:
+            lid = a.get("lawsuits_id")
+            if not isinstance(lid, int):
+                continue
+            extra = self._lawsuit_cache.get(lid)
+            if extra:
+                a["__lawsuit_extra__"] = extra
+
     @staticmethod
     def _build_history_map(resposta: object) -> dict[tuple[str, str], str]:
         """Constrói {(task, start): author} a partir da resposta do /history."""
@@ -440,7 +501,10 @@ class Exporter:
                     f"  descartadas {descartadas} entrada(s) de '{TASK_ALERTA_EXCLUIDA}'",
                 )
 
-            self._enriquecer_com_author(data_filtrada, log, stop)
+            if self._incluir_remetente:
+                self._enriquecer_com_author(data_filtrada, log, stop)
+            if self._incluir_dados_processo:
+                self._enriquecer_com_dados_processo(data_filtrada, log, stop)
 
             gravados = gravar_jsonl_append(jsonl_path, data_filtrada)
             offset += total_recebido  # offset segue baseado no que a API entregou

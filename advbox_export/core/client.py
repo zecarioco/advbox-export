@@ -212,3 +212,7 @@ class AdvboxClient:
         if status:
             params["status"] = status
         return self._get(f"/history/{lawsuit_id}", params)
+
+    def get_lawsuit(self, lawsuit_id: int) -> Any:
+        """GET /lawsuits/{id} — detalhes do processo (type, group, stage, responsible)."""
+        return self._get(f"/lawsuits/{lawsuit_id}", {})

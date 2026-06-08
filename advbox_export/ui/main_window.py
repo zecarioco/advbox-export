@@ -8,6 +8,7 @@ from PySide6.QtGui import QAction, QActionGroup, QColor, QDesktopServices, QFont
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
+    QCheckBox,
     QDateEdit,
     QFormLayout,
     QFrame,
@@ -247,6 +248,26 @@ class MainWindow(QMainWindow):
         form.addRow("Até:", self.input_ate)
         card.add_layout(form)
 
+        opcoes_label = QLabel("OPÇÕES AVANÇADAS")
+        opcoes_label.setObjectName("sectionLabel")
+        card.add(opcoes_label)
+
+        self.chk_remetente = QCheckBox("Buscar Remetente (autor da tarefa)")
+        self.chk_remetente.setToolTip(
+            "Faz 1 requisição extra por processo do escritório para preencher a "
+            "coluna 'Remetente'. Aumenta o tempo do export em ~1s por processo."
+        )
+        card.add(self.chk_remetente)
+
+        self.chk_dados_processo = QCheckBox(
+            "Incluir dados do processo (tipo, fase, responsável)"
+        )
+        self.chk_dados_processo.setToolTip(
+            "Adiciona 4 colunas: Tipo do processo, Grupo, Fase, Responsável. "
+            "Faz 1 requisição extra por processo."
+        )
+        card.add(self.chk_dados_processo)
+
         self.btn_exportar = QPushButton("Exportar agora")
         self.btn_exportar.setMinimumHeight(40)
         self.btn_exportar.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -476,6 +497,8 @@ class MainWindow(QMainWindow):
             date_from=date_from,
             date_to=date_to,
             nome=nome,
+            incluir_remetente=self.chk_remetente.isChecked(),
+            incluir_dados_processo=self.chk_dados_processo.isChecked(),
         )
         self._thread = QThread(self)
         self._worker.moveToThread(self._thread)

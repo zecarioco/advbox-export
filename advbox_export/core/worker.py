@@ -40,6 +40,8 @@ class ExportWorker(QObject):
         date_from: date,
         date_to: date,
         nome: str,
+        incluir_remetente: bool = False,
+        incluir_dados_processo: bool = False,
     ) -> None:
         super().__init__()
         self._client = client
@@ -49,6 +51,8 @@ class ExportWorker(QObject):
         self._date_from = date_from
         self._date_to = date_to
         self._nome = nome
+        self._incluir_remetente = incluir_remetente
+        self._incluir_dados_processo = incluir_dados_processo
         self._stop_requested = False
         self._log_buffer = io.StringIO()
         self._export_id: int | None = None
@@ -80,6 +84,8 @@ class ExportWorker(QObject):
                 progress_cb=self._on_progress,
                 log_cb=self._on_log,
                 should_stop=lambda: self._stop_requested,
+                incluir_remetente=self._incluir_remetente,
+                incluir_dados_processo=self._incluir_dados_processo,
             )
         except ExportCancelado:
             log_path = self._dump_log()
