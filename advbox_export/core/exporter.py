@@ -468,8 +468,8 @@ class Exporter:
                 raise ExportCancelado()
 
             resposta = self.client.list_atividades(
-                date_start=janela.inicio,
-                date_end=janela.fim,
+                completed_start=janela.inicio,
+                completed_end=janela.fim,
                 limit=PAGE_SIZE,
                 offset=offset,
             )

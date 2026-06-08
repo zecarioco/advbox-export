@@ -123,6 +123,36 @@ def main() -> int:
     print()
     print("--- mesma atividade achatada (como vai pro XLSX) ---")
     print(json.dumps(achatar_atividade(primeira), indent=2, ensure_ascii=False))
+    print()
+
+    # --- audit do /settings pra ver se há campos não documentados em tasks[] ---
+    print("--- audit empírico /settings ---")
+    try:
+        settings = client._get("/settings", {})
+    except Exception as exc:
+        print(f"(falha ao buscar /settings: {exc})")
+        return 0
+    if isinstance(settings, dict):
+        print(f"top-level keys: {sorted(settings.keys())}")
+        tasks_list = settings.get("tasks") or []
+        if tasks_list:
+            print(f"tasks[]: {len(tasks_list)} entradas. Chaves da primeira: {sorted(tasks_list[0].keys())}")
+            print("Primeira task (cru):")
+            print(json.dumps(tasks_list[0], indent=2, ensure_ascii=False))
+            # Procurar uma task com campos extras
+            chaves_uniao = set()
+            for t in tasks_list:
+                if isinstance(t, dict):
+                    chaves_uniao.update(t.keys())
+            extras = chaves_uniao - {"id", "task", "reward"}
+            if extras:
+                print(f"campos NÃO documentados em tasks[]: {sorted(extras)}")
+                # mostrar uma task com extras
+                for t in tasks_list:
+                    if any(k in t for k in extras):
+                        print("exemplo com campos extras:")
+                        print(json.dumps(t, indent=2, ensure_ascii=False))
+                        break
     return 0
 
 

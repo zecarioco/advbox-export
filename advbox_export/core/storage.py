@@ -74,7 +74,7 @@ def achatar_atividade(atividade: dict[str, Any]) -> dict[str, Any]:
         "task": atividade.get("task"),
         "local": atividade.get("local"),
         "_remetente": atividade.get("__author__") or "",
-        "_destinatario": ", ".join(u.get("name", "") for u in users if u.get("name")),
+        "_destinatario": _destinatario_principal(users),
         "_partes": ", ".join(c.get("name", "") for c in customers if c.get("name")),
         "_process_number": lawsuit.get("process_number"),
         "_protocol_number": lawsuit.get("protocol_number"),
@@ -104,15 +104,28 @@ def _primeira_data_conclusao(users: list[dict[str, Any]]) -> str:
 def _prioridade_agregada(users: list[dict[str, Any]]) -> str:
     """Agrega as flags por usuário em um nível único de prioridade.
 
-    Qualquer responsável com urgent=1 → URGENTE.
-    Senão, qualquer com important=1 → ALTA.
-    Senão → NORMAL.
+    Auditado contra o painel da AdvBox: 3 valores possíveis — NORMAL, URGENTE,
+    IMPORTANTE. urgent ganha sobre important.
     """
     if any(u.get("urgent") for u in users):
         return "URGENTE"
     if any(u.get("important") for u in users):
-        return "ALTA"
+        return "IMPORTANTE"
     return "NORMAL"
+
+
+def _destinatario_principal(users: list[dict[str, Any]]) -> str:
+    """Único nome do destinatário, igual ao painel.
+
+    Prefere o user que concluiu a tarefa (first com completed != null). Se
+    ninguém concluiu, pega o primeiro da lista.
+    """
+    for u in users:
+        if u.get("completed") and u.get("name"):
+            return u["name"]
+    if users and users[0].get("name"):
+        return users[0]["name"]
+    return ""
 
 
 def _split_datetime(raw: Any) -> tuple[str, str]:
