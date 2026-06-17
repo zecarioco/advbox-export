@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import calendar
+import collections
 import json
 import logging
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
@@ -23,6 +24,12 @@ logger = logging.getLogger(__name__)
 
 PAGE_SIZE = 1000
 STATE_VERSION = 1
+
+# A API rejeita offset > 10000 com 422 ("use cursor pagination") e não
+# expõe parâmetro de cursor (testado: cursor/after/since_id/starting_after/page
+# e mais 8 nomes — todos ignorados). Workaround: se totalCount da janela
+# passar disso, subdividir a janela ao meio até cada metade caber.
+API_OFFSET_LIMIT = 10000
 
 # Atividades com este `task` são logs internos da AdvBox (exclusões de tarefas).
 # Vêm com tudo null (date, lawsuits_id, lawsuit, etc) e não aparecem no painel.
@@ -49,8 +56,18 @@ class Janela:
     fim: str
 
     def label(self) -> str:
-        if self.inicio[:7] == self.fim[:7]:
-            return self.inicio[:7]
+        """Label legível usado pra dedup de janelas concluídas.
+
+        Mês inteiro fechado vira 'YYYY-MM'. Qualquer outra coisa (incluindo
+        sub-janelas após split) vira o range completo — caso contrário 2
+        sub-janelas do mesmo mês teriam o mesmo label e a 2ª seria pulada.
+        """
+        if self.inicio == self.fim:
+            return self.inicio
+        if self.inicio[:7] == self.fim[:7] and self.inicio.endswith("-01"):
+            ultimo = calendar.monthrange(int(self.fim[:4]), int(self.fim[5:7]))[1]
+            if int(self.fim[8:10]) == ultimo:
+                return self.inicio[:7]
         return f"{self.inicio} → {self.fim}"
 
 
@@ -140,6 +157,20 @@ def _janelas_mensais(inicio: date, fim: date) -> list[Janela]:
     return janelas
 
 
+def _subdividir_janela(janela: Janela) -> list[Janela] | None:
+    """Divide uma janela ao meio. Retorna None se já é um único dia."""
+    inicio = date.fromisoformat(janela.inicio)
+    fim = date.fromisoformat(janela.fim)
+    if inicio >= fim:
+        return None
+    delta_dias = (fim - inicio).days
+    meio = inicio + timedelta(days=delta_dias // 2)
+    return [
+        Janela(inicio=inicio.isoformat(), fim=meio.isoformat()),
+        Janela(inicio=(meio + timedelta(days=1)).isoformat(), fim=fim.isoformat()),
+    ]
+
+
 class Exporter:
     def __init__(
         self,
@@ -214,7 +245,7 @@ class Exporter:
             state_path.unlink(missing_ok=True)
             state = None
 
-        janelas = _janelas_mensais(date_from, date_to)
+        janelas_iniciais = _janelas_mensais(date_from, date_to)
 
         if state is None:
             jsonl_path = self.exports_dir / f".tmp_{periodo.slug}_atividades.jsonl"
@@ -226,37 +257,82 @@ class Exporter:
                 jsonl_path=str(jsonl_path),
                 iniciado_em=datetime.now().isoformat(timespec="seconds"),
             )
-            log("INFO", f"iniciando export: {periodo.slug} ({len(janelas)} janelas)")
+            log("INFO", f"iniciando export: {periodo.slug} ({len(janelas_iniciais)} janelas mensais)")
         else:
             jsonl_path = Path(state.jsonl_path)
+            # State corrompido (ex: rodada anterior bateu no offset=10000 antes
+            # da subdivisão existir): descarta janela_atual pra ela ser
+            # re-probed e subdividida.
+            if state.offset_atual > API_OFFSET_LIMIT:
+                log(
+                    "WARN",
+                    f"state com offset_atual={state.offset_atual} > {API_OFFSET_LIMIT} "
+                    f"(da versão antiga, antes da subdivisão automática) — "
+                    f"resetando janela atual pra reprocessar com split",
+                )
+                state.janela_atual = None
+                state.offset_atual = 0
+                self._salvar_state(state_path, state)
             log(
                 "INFO",
-                f"retomando export {periodo.slug}: {len(state.janelas_concluidas)}/{len(janelas)} janelas concluídas, total parcial={state.total_baixado}",
+                f"retomando export {periodo.slug}: {len(state.janelas_concluidas)} janelas concluídas, total parcial={state.total_baixado}",
             )
 
+        # Fila de janelas pendentes — subdivisões adicionam novas entradas
+        # no início. Janelas já completas (ou em retomada) entram no estado certo.
+        fila: collections.deque[Janela] = collections.deque(janelas_iniciais)
+        janelas_concluidas_nesta_run = 0
+
         inicio_run = time.monotonic()
-        total_estimado = state.total_baixado
 
         try:
-            for indice, janela in enumerate(janelas, start=1):
+            while fila:
                 if stop():
                     raise ExportCancelado()
+
+                janela = fila.popleft()
                 if janela.label() in state.janelas_concluidas:
                     continue
+
+                # Pré-probe: pega totalCount com custo mínimo (limit=1).
                 if state.janela_atual and state.janela_atual.label() == janela.label():
+                    # Retomada da mesma janela — total já foi descoberto antes.
                     offset_inicial = state.offset_atual
+                    janela_total: int | None = None
                 else:
                     offset_inicial = 0
+                    janela_total = self._probe_total(janela, stop)
+                    if janela_total is not None and janela_total > API_OFFSET_LIMIT:
+                        sub = _subdividir_janela(janela)
+                        if sub is None:
+                            log(
+                                "ERROR",
+                                f"janela {janela.label()} tem {janela_total} atividades "
+                                f"(>{API_OFFSET_LIMIT}) e já é de 1 dia — não dá pra dividir mais",
+                            )
+                            # Tenta processar mesmo assim — a API vai entregar até offset 10000.
+                        else:
+                            log(
+                                "INFO",
+                                f"janela {janela.label()} tem {janela_total} atividades "
+                                f"(>{API_OFFSET_LIMIT}) — subdividindo em {len(sub)}",
+                            )
+                            for s in reversed(sub):
+                                fila.appendleft(s)
+                            continue
                     state.janela_atual = janela
                     state.offset_atual = 0
                     self._salvar_state(state_path, state)
 
+                indice = janelas_concluidas_nesta_run + 1
+                janelas_total_estimado = indice + len(fila)
                 log(
                     "INFO",
-                    f"janela {indice}/{len(janelas)}: {janela.label()} (offset inicial {offset_inicial})",
+                    f"janela {indice}/{janelas_total_estimado}+: {janela.label()} "
+                    f"(total_count={janela_total or '?'}, offset inicial {offset_inicial})",
                 )
 
-                janela_total = self._processar_janela(
+                self._processar_janela(
                     janela=janela,
                     offset_inicial=offset_inicial,
                     state=state,
@@ -266,16 +342,15 @@ class Exporter:
                     emit=emit,
                     stop=stop,
                     janela_indice=indice,
-                    janelas_total=len(janelas),
+                    janelas_total=janelas_total_estimado,
+                    total_count_conhecido=janela_total,
                 )
-                total_estimado = max(total_estimado, state.total_baixado)
-                if janela_total is not None:
-                    total_estimado = max(total_estimado, state.total_baixado + (janela_total - (state.offset_atual)))
 
                 state.janelas_concluidas.append(janela.label())
                 state.janela_atual = None
                 state.offset_atual = 0
                 self._salvar_state(state_path, state)
+                janelas_concluidas_nesta_run += 1
 
             log("INFO", "todas janelas baixadas — gerando XLSX e CSV")
 
@@ -464,6 +539,28 @@ class Exporter:
             )
         self._chaves_logadas = True
 
+    def _probe_total(self, janela: Janela, stop: StopChecker) -> int | None:
+        """Lê totalCount da janela com 1 request mínimo (limit=1).
+
+        Custa ~2.1s (1 GET respeitando o throttle), mas é o único modo de
+        decidir se precisa subdividir antes de bater no offset > 10000.
+        """
+        if stop():
+            raise ExportCancelado()
+        try:
+            r = self.client.list_atividades(
+                completed_start=janela.inicio,
+                completed_end=janela.fim,
+                limit=1,
+                offset=0,
+            )
+        except Exception:
+            return None
+        if not isinstance(r, dict):
+            return None
+        tc = r.get("totalCount")
+        return tc if isinstance(tc, int) else None
+
     def _processar_janela(
         self,
         *,
@@ -477,9 +574,12 @@ class Exporter:
         stop: StopChecker,
         janela_indice: int,
         janelas_total: int,
+        total_count_conhecido: int | None = None,
     ) -> int | None:
         offset = offset_inicial
-        total_count: int | None = None
+        total_count: int | None = total_count_conhecido
+        if total_count is not None:
+            log("INFO", f"  totalCount da janela {janela.label()}: {total_count}")
 
         while True:
             if stop():
