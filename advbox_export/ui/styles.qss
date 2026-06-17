@@ -528,3 +528,74 @@ QMessageBox QLabel {
     color: #1a2420;
     background: transparent;
 }
+
+/* ---------- Tabs (Export / Grupos) ---------- */
+QTabWidget::pane {
+    border: 1px solid #d4e1d9;
+    border-radius: 12px;
+    background-color: #ffffff;
+    top: -1px;
+    padding: 4px;
+}
+QTabBar {
+    background: transparent;
+    qproperty-drawBase: 0;
+}
+QTabBar::tab {
+    background-color: transparent;
+    color: #677872;
+    padding: 9px 22px;
+    margin-right: 6px;
+    margin-bottom: 2px;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    font-weight: 500;
+    min-width: 80px;
+}
+QTabBar::tab:hover:!selected {
+    background-color: #eef2ee;
+    color: #1a2420;
+}
+QTabBar::tab:selected {
+    background-color: #3a5a45;
+    color: #fefdf8;
+    font-weight: 600;
+}
+
+/* ---------- Cards de grupo (aba Grupos) ---------- */
+QFrame#grupoCard {
+    background-color: #ffffff;
+    border: 1px solid #d4e1d9;
+    border-radius: 10px;
+}
+QFrame#grupoCard:hover {
+    border-color: #b9ccc1;
+}
+QLabel#grupoNome {
+    color: #1a2420;
+    font-size: 15px;
+    font-weight: 600;
+    background: transparent;
+}
+QLabel#grupoSubtitulo {
+    color: #677872;
+    font-size: 12px;
+    background: transparent;
+}
+QToolButton#grupoMenu {
+    background-color: transparent;
+    color: #677872;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 18px;
+    font-weight: 700;
+}
+QToolButton#grupoMenu:hover {
+    background-color: #eef2ee;
+    color: #1a2420;
+}
+QToolButton#grupoMenu::menu-indicator {
+    image: none;
+    width: 0;
+}
