@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 DEFAULT_BASE_URL = "https://app.advbox.com.br/api/v1"
@@ -16,14 +16,31 @@ class Config:
     token: str = ""
     base_url: str = DEFAULT_BASE_URL
     theme: str = "light"
-    # None = exporta todos os destinatários. Lista de nomes = filtra somente esses
-    # (replica o "filtro de equipe" do painel da AdvBox, que não é exposto pela API).
-    usuarios_filtrados: list[str] | None = None
+    # Grupos cadastrados pelo usuário pra simular o "filtro de equipe" do painel
+    # (a API não expõe grupos publicamente). Formato: {nome_grupo: [nome_user, ...]}.
+    grupos: dict[str, list[str]] = field(default_factory=dict)
+    # Seleção que define quem entra no próximo export. União dos dois aplica-se
+    # como filtro de Destinatário. Ambas vazias = sem filtro (todos os users).
+    grupos_selecionados: list[str] = field(default_factory=list)
+    pessoas_selecionadas: list[str] = field(default_factory=list)
+
+    def usuarios_efetivos(self) -> set[str] | None:
+        """Resolve a seleção atual em um set de nomes. None = sem filtro."""
+        if not self.grupos_selecionados and not self.pessoas_selecionadas:
+            return None
+        nomes: set[str] = set(self.pessoas_selecionadas)
+        for g in self.grupos_selecionados:
+            nomes.update(self.grupos.get(g, []))
+        return nomes
 
     def to_dict(self) -> dict:
         d: dict = {"token": self.token, "base_url": self.base_url, "theme": self.theme}
-        if self.usuarios_filtrados is not None:
-            d["usuarios_filtrados"] = list(self.usuarios_filtrados)
+        if self.grupos:
+            d["grupos"] = {nome: list(ms) for nome, ms in self.grupos.items()}
+        if self.grupos_selecionados:
+            d["grupos_selecionados"] = list(self.grupos_selecionados)
+        if self.pessoas_selecionadas:
+            d["pessoas_selecionadas"] = list(self.pessoas_selecionadas)
         return d
 
     @classmethod
@@ -31,16 +48,25 @@ class Config:
         theme = d.get("theme") or "light"
         if theme not in VALID_THEMES:
             theme = "light"
-        raw_filtros = d.get("usuarios_filtrados")
-        if isinstance(raw_filtros, list):
-            filtros: list[str] | None = [str(x) for x in raw_filtros if isinstance(x, str)]
-        else:
-            filtros = None
+
+        raw_grupos = d.get("grupos")
+        grupos: dict[str, list[str]] = {}
+        if isinstance(raw_grupos, dict):
+            for nome, membros in raw_grupos.items():
+                if isinstance(nome, str) and isinstance(membros, list):
+                    grupos[nome] = [str(m) for m in membros if isinstance(m, str)]
+
+        def _list_str(key: str) -> list[str]:
+            raw = d.get(key)
+            return [str(x) for x in raw if isinstance(x, str)] if isinstance(raw, list) else []
+
         return cls(
             token=d.get("token", "") or "",
             base_url=d.get("base_url") or DEFAULT_BASE_URL,
             theme=theme,
-            usuarios_filtrados=filtros,
+            grupos=grupos,
+            grupos_selecionados=_list_str("grupos_selecionados"),
+            pessoas_selecionadas=_list_str("pessoas_selecionadas"),
         )
 
 

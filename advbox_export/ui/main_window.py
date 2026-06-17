@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -50,6 +51,7 @@ from advbox_export.db import (
     ExportRepository,
     ExportRow,
 )
+from advbox_export.ui.grupos_tab import GruposTab
 from advbox_export.ui.settings_dialog import SettingsDialog
 from advbox_export.ui.theme import apply_theme
 from advbox_export.ui.users_dialog import UsersDialog
@@ -146,25 +148,38 @@ class MainWindow(QMainWindow):
         return a
 
     def _build_central(self) -> None:
+        central = QWidget()
+        central.setObjectName("centralWidget")
+        outer = QVBoxLayout(central)
+        outer.setContentsMargins(32, 28, 32, 8)
+        outer.setSpacing(16)
+        outer.addLayout(self._build_header())
+
+        self.tabs = QTabWidget()
+        self.tabs.setDocumentMode(True)
+        self.tabs.addTab(self._build_aba_export(), "Export")
+        self.grupos_tab = GruposTab(self.config_store)
+        self.grupos_tab.grupos_alterados.connect(self._on_grupos_alterados)
+        self.tabs.addTab(self.grupos_tab, "Grupos")
+        outer.addWidget(self.tabs, 1)
+
+        self.setCentralWidget(central)
+
+    def _build_aba_export(self) -> QWidget:
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        central = QWidget()
-        central.setObjectName("centralWidget")
-        scroll.setWidget(central)
-
-        v = QVBoxLayout(central)
-        v.setContentsMargins(32, 28, 32, 28)
-        v.setSpacing(24)
-
-        v.addLayout(self._build_header())
+        inner = QWidget()
+        v = QVBoxLayout(inner)
+        v.setContentsMargins(0, 12, 0, 20)
+        v.setSpacing(20)
         v.addWidget(self._build_alerta_token())
         v.addWidget(self._build_card_novo_export())
         v.addWidget(self._build_card_andamento())
         v.addWidget(self._build_card_historico())
         v.addStretch()
-
-        self.setCentralWidget(scroll)
+        scroll.setWidget(inner)
+        return scroll
 
     def _build_header(self) -> QVBoxLayout:
         layout = QVBoxLayout()
@@ -511,11 +526,7 @@ class MainWindow(QMainWindow):
             nome=nome,
             incluir_remetente=self.chk_remetente.isChecked(),
             incluir_comentarios=self.chk_comentarios.isChecked(),
-            usuarios_permitidos=(
-                set(cfg.usuarios_filtrados)
-                if cfg.usuarios_filtrados is not None
-                else None
-            ),
+            usuarios_permitidos=cfg.usuarios_efetivos(),
         )
         self._thread = QThread(self)
         self._worker.moveToThread(self._thread)
@@ -744,18 +755,32 @@ class MainWindow(QMainWindow):
 
     def _atualizar_btn_filtro_users(self) -> None:
         cfg = self.config_store.load()
-        if cfg.usuarios_filtrados is None:
+        efetivos = cfg.usuarios_efetivos()
+        if efetivos is None:
             self.btn_filtro_users.setText("Destinatários: todos")
             self.btn_filtro_users.setToolTip(
                 "Sem filtro — todas as tarefas concluídas no período entram no export."
             )
-        else:
-            n = len(cfg.usuarios_filtrados)
-            self.btn_filtro_users.setText(f"Destinatários: {n} selecionado(s)")
-            self.btn_filtro_users.setToolTip(
-                "Filtro ativo — só tarefas concluídas por esses usuários entram. "
-                "Clique pra editar."
-            )
+            return
+        partes: list[str] = []
+        if cfg.grupos_selecionados:
+            partes.append(f"{len(cfg.grupos_selecionados)} grupo(s)")
+        if cfg.pessoas_selecionadas:
+            partes.append(f"{len(cfg.pessoas_selecionadas)} pessoa(s) avulsa(s)")
+        resumo = " + ".join(partes) if partes else "0 selecionados"
+        self.btn_filtro_users.setText(
+            f"Destinatários: {resumo} = {len(efetivos)} usuário(s)"
+        )
+        self.btn_filtro_users.setToolTip(
+            "Filtro ativo — só tarefas concluídas por esses usuários entram. "
+            "Clique pra editar."
+        )
+
+    def _on_grupos_alterados(self) -> None:
+        """Aba 'Grupos' mudou algo — atualiza o resumo do botão de filtro
+        (contagens podem ter mudado, ou um grupo pode ter sido removido).
+        """
+        self._atualizar_btn_filtro_users()
 
     def _abrir_filtro_users(self) -> None:
         cfg = self.config_store.load()
@@ -787,11 +812,17 @@ class MainWindow(QMainWindow):
             )
             return
 
-        dlg = UsersDialog(nomes, set(cfg.usuarios_filtrados) if cfg.usuarios_filtrados else None, parent=self)
+        dlg = UsersDialog(
+            nomes_disponiveis=nomes,
+            grupos=cfg.grupos,
+            grupos_marcados=cfg.grupos_selecionados,
+            pessoas_marcadas=cfg.pessoas_selecionadas,
+            parent=self,
+        )
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
-        # Se marcou todos, persistir como None (sem filtro). Senão guarda a lista.
-        cfg.usuarios_filtrados = None if dlg.todos_selecionados() else dlg.selecionados()
+        cfg.grupos_selecionados = dlg.grupos_selecionados()
+        cfg.pessoas_selecionadas = dlg.pessoas_selecionadas()
         self.config_store.save(cfg)
         self._atualizar_btn_filtro_users()
 
