@@ -42,6 +42,7 @@ class ExportWorker(QObject):
         nome: str,
         incluir_remetente: bool = False,
         incluir_comentarios: bool = False,
+        usuarios_permitidos: set[str] | None = None,
     ) -> None:
         super().__init__()
         self._client = client
@@ -53,6 +54,7 @@ class ExportWorker(QObject):
         self._nome = nome
         self._incluir_remetente = incluir_remetente
         self._incluir_comentarios = incluir_comentarios
+        self._usuarios_permitidos = usuarios_permitidos
         self._stop_requested = False
         self._log_buffer = io.StringIO()
         self._export_id: int | None = None
@@ -86,6 +88,7 @@ class ExportWorker(QObject):
                 should_stop=lambda: self._stop_requested,
                 incluir_remetente=self._incluir_remetente,
                 incluir_comentarios=self._incluir_comentarios,
+                usuarios_permitidos=self._usuarios_permitidos,
             )
         except ExportCancelado:
             log_path = self._dump_log()

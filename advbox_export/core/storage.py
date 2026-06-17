@@ -46,6 +46,7 @@ def expandir_atividade(
     *,
     range_inicio_iso: str | None = None,
     range_fim_iso: str | None = None,
+    usuarios_permitidos: set[str] | None = None,
 ) -> Iterable[dict[str, Any]]:
     """Emite uma linha por user que completou a atividade, igual ao painel.
 
@@ -92,6 +93,8 @@ def expandir_atividade(
         completed = u.get("completed")
         nome = u.get("name")
         if not completed or not isinstance(completed, str) or not nome:
+            continue
+        if usuarios_permitidos is not None and nome not in usuarios_permitidos:
             continue
         dia = completed[:10]
         if range_inicio_iso and dia < range_inicio_iso:
@@ -179,6 +182,7 @@ def _coletar_linhas_ordenadas(
     *,
     range_inicio_iso: str | None,
     range_fim_iso: str | None,
+    usuarios_permitidos: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Lê o JSONL, expande user-completados, ordena ASC por Data Conclusão.
 
@@ -194,6 +198,7 @@ def _coletar_linhas_ordenadas(
                 atividade,
                 range_inicio_iso=range_inicio_iso,
                 range_fim_iso=range_fim_iso,
+                usuarios_permitidos=usuarios_permitidos,
             )
         )
     linhas.sort(key=lambda l: (l.get("_sort_key") or "", l.get("id") or 0))
@@ -206,6 +211,7 @@ def gerar_xlsx(
     *,
     range_inicio_iso: str | None = None,
     range_fim_iso: str | None = None,
+    usuarios_permitidos: set[str] | None = None,
 ) -> int:
     """Lê o JSONL e escreve XLSX expandindo 1 linha por user-completado."""
     xlsx_path.parent.mkdir(parents=True, exist_ok=True)
@@ -238,6 +244,7 @@ def gerar_xlsx(
         jsonl_path,
         range_inicio_iso=range_inicio_iso,
         range_fim_iso=range_fim_iso,
+        usuarios_permitidos=usuarios_permitidos,
     )
 
     row_idx = 2
@@ -291,6 +298,7 @@ def gerar_csv(
     *,
     range_inicio_iso: str | None = None,
     range_fim_iso: str | None = None,
+    usuarios_permitidos: set[str] | None = None,
 ) -> int:
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     headers = [h for h, _ in COLUNAS]
@@ -300,6 +308,7 @@ def gerar_csv(
         jsonl_path,
         range_inicio_iso=range_inicio_iso,
         range_fim_iso=range_fim_iso,
+        usuarios_permitidos=usuarios_permitidos,
     )
 
     count = 0

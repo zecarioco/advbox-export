@@ -16,19 +16,31 @@ class Config:
     token: str = ""
     base_url: str = DEFAULT_BASE_URL
     theme: str = "light"
+    # None = exporta todos os destinatários. Lista de nomes = filtra somente esses
+    # (replica o "filtro de equipe" do painel da AdvBox, que não é exposto pela API).
+    usuarios_filtrados: list[str] | None = None
 
     def to_dict(self) -> dict:
-        return {"token": self.token, "base_url": self.base_url, "theme": self.theme}
+        d: dict = {"token": self.token, "base_url": self.base_url, "theme": self.theme}
+        if self.usuarios_filtrados is not None:
+            d["usuarios_filtrados"] = list(self.usuarios_filtrados)
+        return d
 
     @classmethod
     def from_dict(cls, d: dict) -> "Config":
         theme = d.get("theme") or "light"
         if theme not in VALID_THEMES:
             theme = "light"
+        raw_filtros = d.get("usuarios_filtrados")
+        if isinstance(raw_filtros, list):
+            filtros: list[str] | None = [str(x) for x in raw_filtros if isinstance(x, str)]
+        else:
+            filtros = None
         return cls(
             token=d.get("token", "") or "",
             base_url=d.get("base_url") or DEFAULT_BASE_URL,
             theme=theme,
+            usuarios_filtrados=filtros,
         )
 
 

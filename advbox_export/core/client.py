@@ -217,6 +217,19 @@ class AdvboxClient:
         """GET /lawsuits/{id} — detalhes do processo (type, group, stage, responsible)."""
         return self._get(f"/lawsuits/{lawsuit_id}", {})
 
+    def list_users(self) -> list[dict[str, Any]]:
+        """Lista os usuários cadastrados do escritório a partir de /settings.users.
+
+        Cada item traz `id`, `name`, `email`, `cellphone`. Usado pra preencher
+        o filtro de destinatários na UI — a API não expõe grupos públicos, então
+        o usuário marca manualmente quem quer incluir.
+        """
+        resposta = self._get("/settings", {})
+        if not isinstance(resposta, dict):
+            return []
+        users = resposta.get("users") or []
+        return [u for u in users if isinstance(u, dict) and u.get("name")]
+
     def list_lawsuits(self, *, limit: int = 1000, offset: int = 0) -> Any:
         """GET /lawsuits — lista paginada do catálogo de processos.
 

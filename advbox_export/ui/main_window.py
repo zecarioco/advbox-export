@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QDateEdit,
+    QDialog,
     QFormLayout,
     QFrame,
     QGraphicsDropShadowEffect,
@@ -51,6 +52,7 @@ from advbox_export.db import (
 )
 from advbox_export.ui.settings_dialog import SettingsDialog
 from advbox_export.ui.theme import apply_theme
+from advbox_export.ui.users_dialog import UsersDialog
 
 
 STATUS_LABEL = {
@@ -267,6 +269,16 @@ class MainWindow(QMainWindow):
             "internos do escritório). O painel da AdvBox tampouco mostra essas."
         )
         card.add(self.chk_comentarios)
+
+        # Filtro de destinatários — replica o "filtro de equipe" do painel.
+        # A API não expõe grupos, então é manual (lista de nomes do /settings.users).
+        filtro_row = QHBoxLayout()
+        self.btn_filtro_users = QPushButton()
+        self.btn_filtro_users.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_filtro_users.clicked.connect(self._abrir_filtro_users)
+        filtro_row.addWidget(self.btn_filtro_users, 1)
+        card.add_layout(filtro_row)
+        self._atualizar_btn_filtro_users()
 
         self.btn_exportar = QPushButton("Exportar agora")
         self.btn_exportar.setMinimumHeight(40)
@@ -499,6 +511,11 @@ class MainWindow(QMainWindow):
             nome=nome,
             incluir_remetente=self.chk_remetente.isChecked(),
             incluir_comentarios=self.chk_comentarios.isChecked(),
+            usuarios_permitidos=(
+                set(cfg.usuarios_filtrados)
+                if cfg.usuarios_filtrados is not None
+                else None
+            ),
         )
         self._thread = QThread(self)
         self._worker.moveToThread(self._thread)
@@ -724,6 +741,59 @@ class MainWindow(QMainWindow):
         dlg = SettingsDialog(self.config_store, parent=self)
         dlg.exec()
         self._refresh_alerta_token()
+
+    def _atualizar_btn_filtro_users(self) -> None:
+        cfg = self.config_store.load()
+        if cfg.usuarios_filtrados is None:
+            self.btn_filtro_users.setText("Destinatários: todos")
+            self.btn_filtro_users.setToolTip(
+                "Sem filtro — todas as tarefas concluídas no período entram no export."
+            )
+        else:
+            n = len(cfg.usuarios_filtrados)
+            self.btn_filtro_users.setText(f"Destinatários: {n} selecionado(s)")
+            self.btn_filtro_users.setToolTip(
+                "Filtro ativo — só tarefas concluídas por esses usuários entram. "
+                "Clique pra editar."
+            )
+
+    def _abrir_filtro_users(self) -> None:
+        cfg = self.config_store.load()
+        if not cfg.token:
+            QMessageBox.warning(
+                self,
+                "Token não configurado",
+                "Configure o token AdvBox antes de filtrar destinatários — "
+                "a lista vem da API.",
+            )
+            self._abrir_settings()
+            return
+        try:
+            client = AdvboxClient(token=cfg.token, base_url=cfg.base_url)
+            users = client.list_users()
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Falha ao listar usuários",
+                f"Não foi possível obter a lista de usuários da AdvBox.\n\n{e}",
+            )
+            return
+        nomes = [u.get("name", "") for u in users if u.get("name")]
+        if not nomes:
+            QMessageBox.warning(
+                self,
+                "Lista vazia",
+                "A AdvBox não retornou nenhum usuário em /settings.users.",
+            )
+            return
+
+        dlg = UsersDialog(nomes, set(cfg.usuarios_filtrados) if cfg.usuarios_filtrados else None, parent=self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        # Se marcou todos, persistir como None (sem filtro). Senão guarda a lista.
+        cfg.usuarios_filtrados = None if dlg.todos_selecionados() else dlg.selecionados()
+        self.config_store.save(cfg)
+        self._atualizar_btn_filtro_users()
 
     def _sobre(self) -> None:
         from advbox_export import __version__

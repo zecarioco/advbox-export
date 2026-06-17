@@ -192,6 +192,7 @@ class Exporter:
         # Flags ativadas pelo caller via `run()`.
         self._incluir_remetente = False
         self._incluir_comentarios = False
+        self._usuarios_permitidos: set[str] | None = None
 
     def _state_path(self, slug: str) -> Path:
         return self.state_dir / f"{slug}.json"
@@ -220,9 +221,11 @@ class Exporter:
         should_stop: StopChecker | None = None,
         incluir_remetente: bool = False,
         incluir_comentarios: bool = False,
+        usuarios_permitidos: set[str] | None = None,
     ) -> ExportResult:
         self._incluir_remetente = incluir_remetente
         self._incluir_comentarios = incluir_comentarios
+        self._usuarios_permitidos = usuarios_permitidos
         log = log_cb or (lambda lvl, msg: logger.log(getattr(logging, lvl, logging.INFO), msg))
         emit = progress_cb or (lambda p: None)
         stop = should_stop or (lambda: False)
@@ -365,12 +368,14 @@ class Exporter:
             xlsx_path,
             range_inicio_iso=date_from.isoformat(),
             range_fim_iso=date_to.isoformat(),
+            usuarios_permitidos=self._usuarios_permitidos,
         )
         linhas_csv = gerar_csv(
             jsonl_path,
             csv_path,
             range_inicio_iso=date_from.isoformat(),
             range_fim_iso=date_to.isoformat(),
+            usuarios_permitidos=self._usuarios_permitidos,
         )
         log("INFO", f"gerado {xlsx_path.name} ({linhas_xlsx} linhas) e {csv_path.name} ({linhas_csv} linhas)")
 
