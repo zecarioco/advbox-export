@@ -259,15 +259,6 @@ class MainWindow(QMainWindow):
         )
         card.add(self.chk_remetente)
 
-        self.chk_dados_processo = QCheckBox(
-            "Incluir dados do processo (tipo, fase, responsável)"
-        )
-        self.chk_dados_processo.setToolTip(
-            "Adiciona 4 colunas: Tipo do processo, Grupo, Fase, Responsável. "
-            "Faz 1 requisição extra por processo."
-        )
-        card.add(self.chk_dados_processo)
-
         self.chk_comentarios = QCheckBox(
             "Incluir comentários internos (tarefas sem pontuação)"
         )
@@ -507,7 +498,6 @@ class MainWindow(QMainWindow):
             date_to=date_to,
             nome=nome,
             incluir_remetente=self.chk_remetente.isChecked(),
-            incluir_dados_processo=self.chk_dados_processo.isChecked(),
             incluir_comentarios=self.chk_comentarios.isChecked(),
         )
         self._thread = QThread(self)

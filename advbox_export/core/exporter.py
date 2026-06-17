@@ -156,10 +156,10 @@ class Exporter:
         # cache: lawsuit_id -> {(task, start): author}
         self._historico_cache: dict[int, dict[tuple[str, str], str]] = {}
         # cache: lawsuit_id -> {type, group, stage, responsible, ...}
+        # Populado uma vez no início do run() via /lawsuits paginado.
         self._lawsuit_cache: dict[int, dict] = {}
         # Flags ativadas pelo caller via `run()`.
         self._incluir_remetente = False
-        self._incluir_dados_processo = False
         self._incluir_comentarios = False
 
     def _state_path(self, slug: str) -> Path:
@@ -188,15 +188,15 @@ class Exporter:
         log_cb: LogCallback | None = None,
         should_stop: StopChecker | None = None,
         incluir_remetente: bool = False,
-        incluir_dados_processo: bool = False,
         incluir_comentarios: bool = False,
     ) -> ExportResult:
         self._incluir_remetente = incluir_remetente
-        self._incluir_dados_processo = incluir_dados_processo
         self._incluir_comentarios = incluir_comentarios
         log = log_cb or (lambda lvl, msg: logger.log(getattr(logging, lvl, logging.INFO), msg))
         emit = progress_cb or (lambda p: None)
         stop = should_stop or (lambda: False)
+
+        self._precarregar_lawsuits(log, stop)
 
         periodo = PeriodoArquivo(
             slug=slug_periodo(date_from, date_to),
@@ -285,8 +285,18 @@ class Exporter:
 
         xlsx_path = proximo_caminho_versionado(self.exports_dir, periodo.slug, ".xlsx")
         csv_path = xlsx_path.with_suffix(".csv")
-        linhas_xlsx = gerar_xlsx(jsonl_path, xlsx_path)
-        linhas_csv = gerar_csv(jsonl_path, csv_path)
+        linhas_xlsx = gerar_xlsx(
+            jsonl_path,
+            xlsx_path,
+            range_inicio_iso=date_from.isoformat(),
+            range_fim_iso=date_to.isoformat(),
+        )
+        linhas_csv = gerar_csv(
+            jsonl_path,
+            csv_path,
+            range_inicio_iso=date_from.isoformat(),
+            range_fim_iso=date_to.isoformat(),
+        )
         log("INFO", f"gerado {xlsx_path.name} ({linhas_xlsx} linhas) e {csv_path.name} ({linhas_csv} linhas)")
 
         jsonl_path.unlink(missing_ok=True)
@@ -350,49 +360,57 @@ class Exporter:
             if author:
                 a["__author__"] = author
 
-    def _enriquecer_com_dados_processo(
-        self,
-        batch: list[dict],
-        log: LogCallback,
-        stop: StopChecker,
-    ) -> None:
-        """Injeta __lawsuit_extra__ em cada atividade com lawsuits_id.
+    def _precarregar_lawsuits(self, log: LogCallback, stop: StopChecker) -> None:
+        """Pagina /lawsuits uma vez e popula _lawsuit_cache com o catálogo inteiro.
 
-        Busca /lawsuits/{id} pra cada processo único e cacheia. Mesma estratégia
-        de cancelamento e cache parcial do enriquecimento de Remetente.
+        Custa ceil(totalCount / PAGE_SIZE) requests (~6s pra um escritório de
+        ~2800 processos), em vez de 1 GET por processo único nas atividades.
+        Resultado: type/group/stage/responsible disponíveis pra todo lawsuits_id
+        sem custo adicional por janela.
         """
-        ids_novos: list[int] = []
-        for a in batch:
-            lid = a.get("lawsuits_id")
-            if isinstance(lid, int) and lid not in self._lawsuit_cache:
-                if lid not in ids_novos:
-                    ids_novos.append(lid)
-
-        if ids_novos:
-            log(
-                "INFO",
-                f"  buscando dados de {len(ids_novos)} processo(s) novo(s) "
-                f"(tipo/fase/responsável, ~{len(ids_novos) * 2.1:.0f}s)",
-            )
-
-        for lid in ids_novos:
+        if self._lawsuit_cache:
+            return  # já populado (ex: retomada da mesma instância)
+        offset = 0
+        total: int | None = None
+        log("INFO", "pré-carregando catálogo de processos (/lawsuits)…")
+        while True:
             if stop():
                 raise ExportCancelado()
             try:
-                resposta = self.client.get_lawsuit(lid)
-                if isinstance(resposta, dict):
-                    self._lawsuit_cache[lid] = {
-                        "type": resposta.get("type") or "",
-                        "group": resposta.get("group") or "",
-                        "stage": resposta.get("stage") or "",
-                        "responsible": resposta.get("responsible") or "",
-                    }
-                else:
-                    self._lawsuit_cache[lid] = {}
+                resp = self.client.list_lawsuits(limit=PAGE_SIZE, offset=offset)
             except Exception as exc:
-                log("WARN", f"falha em /lawsuits/{lid}: {exc} — dados do processo ficarão vazios")
-                self._lawsuit_cache[lid] = {}
+                log("WARN", f"falha em /lawsuits offset={offset}: {exc} — Tipo de ação ficará vazio")
+                return
+            if not isinstance(resp, dict):
+                log("WARN", f"/lawsuits devolveu tipo inesperado em offset={offset} — abortando pré-carga")
+                return
+            data = resp.get("data") or []
+            if not isinstance(data, list):
+                log("WARN", f"/lawsuits sem campo 'data' em offset={offset} — abortando pré-carga")
+                return
+            if total is None:
+                total = resp.get("totalCount") if isinstance(resp.get("totalCount"), int) else None
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                lid = item.get("id")
+                if not isinstance(lid, int):
+                    continue
+                self._lawsuit_cache[lid] = {
+                    "type": item.get("type") or "",
+                    "group": item.get("group") or "",
+                    "stage": item.get("stage") or "",
+                    "responsible": item.get("responsible") or "",
+                }
+            if len(data) < PAGE_SIZE:
+                break
+            if isinstance(total, int) and offset + len(data) >= total:
+                break
+            offset += len(data)
+        log("INFO", f"  catálogo carregado: {len(self._lawsuit_cache)} processo(s)")
 
+    def _aplicar_lawsuit_extra(self, batch: list[dict]) -> None:
+        """Injeta __lawsuit_extra__ a partir do cache pré-carregado."""
         for a in batch:
             lid = a.get("lawsuits_id")
             if not isinstance(lid, int):
@@ -505,8 +523,11 @@ class Exporter:
 
             if not self._incluir_comentarios:
                 antes = len(data_filtrada)
+                # Painel descarta APENAS reward=0 (comentários internos auto).
+                # Mantém positivos (recompensa) e negativos (penalidade por atraso —
+                # ex: LAUDO EM ATRASO reward=-100).
                 data_filtrada = [
-                    a for a in data_filtrada if (a.get("reward") or 0) > 0
+                    a for a in data_filtrada if (a.get("reward") or 0) != 0
                 ]
                 descartadas_comentario = antes - len(data_filtrada)
                 if descartadas_comentario:
@@ -516,10 +537,9 @@ class Exporter:
                         f"(comentários internos — marque 'Incluir comentários' pra incluir)",
                     )
 
+            self._aplicar_lawsuit_extra(data_filtrada)
             if self._incluir_remetente:
                 self._enriquecer_com_author(data_filtrada, log, stop)
-            if self._incluir_dados_processo:
-                self._enriquecer_com_dados_processo(data_filtrada, log, stop)
 
             gravados = gravar_jsonl_append(jsonl_path, data_filtrada)
             offset += total_recebido  # offset segue baseado no que a API entregou

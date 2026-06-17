@@ -24,7 +24,7 @@ from advbox_export.core.client import AdvboxClient  # noqa: E402
 from advbox_export.core.config import ConfigStore  # noqa: E402
 from advbox_export.core.exporter import CHAVES_ATIVIDADE_CONHECIDAS  # noqa: E402
 from advbox_export.core.paths import config_file  # noqa: E402
-from advbox_export.core.storage import achatar_atividade  # noqa: E402
+from advbox_export.core.storage import expandir_atividade  # noqa: E402
 
 
 def main() -> int:
@@ -121,8 +121,11 @@ def main() -> int:
     print("--- primeira atividade (cru) ---")
     print(json.dumps(primeira, indent=2, ensure_ascii=False))
     print()
-    print("--- mesma atividade achatada (como vai pro XLSX) ---")
-    print(json.dumps(achatar_atividade(primeira), indent=2, ensure_ascii=False))
+    print("--- mesma atividade expandida (como vai pro XLSX, 1 linha por user-completado) ---")
+    linhas = list(expandir_atividade(primeira))
+    print(f"({len(linhas)} linha(s))")
+    for linha in linhas:
+        print(json.dumps(linha, indent=2, ensure_ascii=False))
     print()
 
     # --- audit do /settings pra ver se há campos não documentados em tasks[] ---

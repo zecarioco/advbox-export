@@ -216,3 +216,13 @@ class AdvboxClient:
     def get_lawsuit(self, lawsuit_id: int) -> Any:
         """GET /lawsuits/{id} — detalhes do processo (type, group, stage, responsible)."""
         return self._get(f"/lawsuits/{lawsuit_id}", {})
+
+    def list_lawsuits(self, *, limit: int = 1000, offset: int = 0) -> Any:
+        """GET /lawsuits — lista paginada do catálogo de processos.
+
+        Envelope padrão (`data`, `totalCount`, `limit`, `offset`). Cada item traz
+        os mesmos campos de /lawsuits/{id} (type, group, stage, responsible, …).
+        Permite preencher o cache do escritório inteiro em ceil(total/limit)
+        requests, em vez de 1 GET por processo único.
+        """
+        return self._get("/lawsuits", {"limit": limit, "offset": offset})
