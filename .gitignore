@@ -16,3 +16,5 @@ advbox.db-journal
 .idea/
 *.swp
 .DS_Store
+
+contexto/
