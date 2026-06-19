@@ -276,8 +276,10 @@ class MainWindow(QMainWindow):
 
         self.chk_remetente = QCheckBox("Buscar Remetente (autor da tarefa)")
         self.chk_remetente.setToolTip(
-            "Faz 1 requisição extra por processo do escritório para preencher a "
-            "coluna 'Remetente'. Aumenta o tempo do export em ~1s por processo."
+            "Faz 1 requisição extra por processo único no período pra preencher "
+            "a coluna 'Remetente'. Custa ~2s por processo (rate limit de 30 "
+            "GETs/min da AdvBox). Cacheado por processo, então repetições não "
+            "pesam. Ex: 200 processos únicos ≈ +7 min."
         )
         card.add(self.chk_remetente)
 
