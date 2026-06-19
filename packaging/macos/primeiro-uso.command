@@ -3,6 +3,8 @@
 # Dê um clique com o botão DIREITO neste arquivo e escolha "Abrir" para rodá-lo
 # na primeira vez. Depois disso o AdvBox Export abre normalmente com duplo-clique.
 
+# xattr -dr com.apple.quarantine /Applications/AdvBoxExport.app
+
 set -e
 
 APP="/Applications/AdvBoxExport.app"
