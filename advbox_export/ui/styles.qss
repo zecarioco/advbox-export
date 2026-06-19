@@ -390,20 +390,34 @@ QCalendarWidget QAbstractItemView:disabled {
 }
 
 QCheckBox {
-    spacing: 8px;
+    spacing: 10px;
     color: #1a2420;
     background: transparent;
+    padding: 4px 2px;
 }
 QCheckBox::indicator {
-    width: 16px;
-    height: 16px;
-    border: 1px solid #d4e1d9;
+    width: 18px;
+    height: 18px;
+    border: 1.5px solid #b9ccc1;
     border-radius: 4px;
     background: #ffffff;
+}
+QCheckBox::indicator:hover {
+    border-color: #3a5a45;
+    background: #f5f8f5;
 }
 QCheckBox::indicator:checked {
     background-color: #3a5a45;
     border-color: #3a5a45;
+    image: url({{CHECK}});
+}
+QCheckBox::indicator:checked:hover {
+    background-color: #324d3b;
+    border-color: #324d3b;
+}
+QCheckBox::indicator:disabled {
+    background: #f3ede5;
+    border-color: #d4e1d9;
 }
 
 /* ---------- Log view (mono) ---------- */
