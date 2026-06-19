@@ -1,6 +1,6 @@
 # AdvBox Export
 
-App desktop para exportar atividades da AdvBox em XLSX e CSV, sem o limite de 1.000 registros do painel web. Funciona em Linux, macOS e Windows.
+App desktop para exportar atividades da AdvBox em XLSX, sem o limite de 1.000 registros do painel web. Funciona em Linux, macOS e Windows.
 
 ## Instalação
 
@@ -57,11 +57,27 @@ O token fica gravado em arquivo de configuração do seu usuário e não precisa
 
 ## Como usar
 
-1. Escolha o período (ou clique num dos atalhos: **Este mês**, **Mês passado**, **Este ano**, **Backfill completo** = últimos 6 anos).
-2. Clique **Exportar agora**.
-3. Acompanhe o progresso e o log. Quando concluir, o card **Histórico** mostra um botão para abrir o XLSX, o CSV e o log do run.
+1. **Nome do export** é preenchido automaticamente no formato `ADVBOX2026 - [02/06 - 02/09]` a partir do período escolhido. Você pode editar à mão; depois disso o app para de regerar.
+2. **Período**: escolha manualmente nos campos *De* / *Até*, ou clique num atalho — **Este mês**, **Mês passado**, **Este ano**, **Backfill completo** (= últimos 6 anos).
+3. **Opções avançadas**:
+   - **Buscar Remetente** — preenche a coluna "Remetente" (autor da tarefa) fazendo 1 requisição extra por processo único no período. Custa ~2s por processo pelo rate limit da AdvBox; ex: 200 processos ≈ +7 min.
+   - **Incluir comentários internos** — quando marcado, inclui tarefas com pontuação zero (comentários internos do escritório). Por padrão o app filtra essas — igual ao painel da AdvBox.
+   - **Destinatários** — abre um diálogo pra escolher grupos cadastrados e/ou pessoas avulsas. Quem entrar em qualquer marcação aparece no export. Nada marcado = inclui todo mundo.
+4. Clique **Exportar agora**.
+5. Acompanhe o progresso e o log. Quando concluir, o card **Histórico** mostra botões pra abrir o XLSX e o log do run.
 
 A API da AdvBox limita 30 requisições por minuto — exports grandes (ex.: 45.000 atividades) levam cerca de 25 minutos. O app respeita esse limite automaticamente e pode ser **cancelado a qualquer momento**; ao rodar de novo o mesmo período, ele retoma do ponto onde parou.
+
+### Aba Grupos
+
+A API da AdvBox não expõe a estrutura de equipes do painel, então o app permite cadastrar grupos manualmente. Cada grupo é uma lista de nomes da própria AdvBox (os mesmos 51 usuários cadastrados no `/settings.users`).
+
+- **+ Novo grupo** — cria um grupo vazio e abre o seletor de pessoas pra popular.
+- **⋯ → Editar pessoas** — abre o seletor de membros pra adicionar/remover gente.
+- **⋯ → Renomear / Excluir grupo** — gerenciamento básico.
+- **↻ Atualizar lista** (dentro do seletor) — força um `/settings.users` novo se você acabou de adicionar alguém na AdvBox e quer ver na lista.
+
+Grupos cadastrados aqui ficam disponíveis no botão **Destinatários** da aba Export pra filtrar quem entra no XLSX.
 
 ## Onde ficam os arquivos
 
@@ -71,7 +87,7 @@ A API da AdvBox limita 30 requisições por minuto — exports grandes (ex.: 45.
 | Histórico (DB) | `~/.local/share/AdvBoxExport/advbox.db` | `~/Library/Application Support/AdvBoxExport/advbox.db` | `%LOCALAPPDATA%\MaldonadoAdv\AdvBoxExport\advbox.db` |
 | Planilhas geradas | `~/.local/share/AdvBoxExport/exports/` | `~/Library/Application Support/AdvBoxExport/exports/` | `%LOCALAPPDATA%\MaldonadoAdv\AdvBoxExport\exports\` |
 
-Pra abrir a pasta das planilhas: **Arquivo → Abrir pasta de exports**.
+Pra abrir a pasta das planilhas: **Histórico → Abrir pasta de exports**.
 
 ---
 
@@ -94,14 +110,32 @@ Em dev, o `.env` na raiz tem precedência sobre o `config.json` salvo na pasta d
 
 ```bash
 uv pip install -e ".[build]"
-uv run pyinstaller --noconfirm --windowed --name AdvBoxExport --collect-all qt_material advbox_export/__main__.py
+uv run pyinstaller \
+  --noconfirm --windowed --name AdvBoxExport \
+  --add-data "advbox_export/ui/styles.qss:advbox_export/ui" \
+  --add-data "advbox_export/ui/styles_dark.qss:advbox_export/ui" \
+  --add-data "advbox_export/ui/fonts:advbox_export/ui/fonts" \
+  --add-data "advbox_export/ui/icons:advbox_export/ui/icons" \
+  advbox_export/__main__.py
 ```
 
+(No Windows substitua `:` por `;` nos `--add-data`.)
+
 ### Publicar release
+
+O jeito recomendado:
+
+```bash
+./scripts/release.sh 0.1.0
+```
+
+O script bump o `pyproject.toml`, comita, cria a tag `v0.1.0` e dá push. O [GitHub Actions](.github/workflows/build.yml) então builda os 3 sistemas em paralelo e anexa os artefatos (`.zip`, `.dmg`, `.tar.gz`) numa release nova no GitHub.
+
+Se quiser tagar à mão:
 
 ```bash
 git tag v0.1.0
 git push --tags
 ```
 
-O GitHub Actions builda nos três sistemas e publica o release com os artefatos anexados.
+Pushes pra `master` sem tag também disparam o build (artefatos ficam no Actions por 14 dias, sem criar release).
