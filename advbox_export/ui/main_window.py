@@ -196,7 +196,7 @@ class MainWindow(QMainWindow):
         titulo.setFont(f)
         layout.addWidget(titulo)
 
-        subtitulo = QLabel("Exporta atividades da AdvBox em XLSX e CSV sem o limite de 1.000 do painel web.")
+        subtitulo = QLabel("Exporta atividades da AdvBox em XLSX sem o limite de 1.000 do painel web.")
         subtitulo.setObjectName("mutedLabel")
         subtitulo.setWordWrap(True)
         layout.addWidget(subtitulo)
@@ -432,7 +432,7 @@ class MainWindow(QMainWindow):
         self.tabela.setColumnWidth(2, 180)
         self.tabela.setColumnWidth(3, 70)
         self.tabela.setColumnWidth(4, 100)
-        self.tabela.setColumnWidth(5, 270)
+        self.tabela.setColumnWidth(5, 210)
         self.tabela.setMinimumHeight(320)
         card.add(self.tabela)
 
@@ -642,7 +642,7 @@ class MainWindow(QMainWindow):
             self,
             "Export concluído",
             f"{resultado.total_atividades} atividades exportadas.\n\n"
-            f"XLSX: {resultado.xlsx_path}\nCSV: {resultado.csv_path}",
+            f"XLSX: {resultado.xlsx_path}",
         )
 
     def _on_failed(self, mensagem: str) -> None:
@@ -713,7 +713,6 @@ class MainWindow(QMainWindow):
         h.addSpacing(16)
         for label, path in [
             ("XLSX", row.caminho_xlsx),
-            ("CSV", row.caminho_csv),
             ("Log", row.caminho_log),
         ]:
             btn = QPushButton(label)
@@ -761,7 +760,7 @@ class MainWindow(QMainWindow):
             self,
             "Excluir export",
             f"Excluir o export de {row.periodo_inicio} → {row.periodo_fim}?\n\n"
-            "O registro do histórico e os arquivos (XLSX, CSV, log) vão ser removidos.\n"
+            "O registro do histórico e os arquivos (XLSX, log) vão ser removidos.\n"
             "Esta ação não pode ser desfeita.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
@@ -769,7 +768,7 @@ class MainWindow(QMainWindow):
         if resposta != QMessageBox.StandardButton.Yes:
             return
 
-        for caminho in (row.caminho_xlsx, row.caminho_csv, row.caminho_log):
+        for caminho in (row.caminho_xlsx, row.caminho_log):
             if caminho:
                 try:
                     Path(caminho).unlink(missing_ok=True)
@@ -876,7 +875,7 @@ class MainWindow(QMainWindow):
             self,
             "Sobre AdvBox Export",
             f"<b>AdvBox Export</b> {__version__}<br>"
-            "Exportador de atividades AdvBox para XLSX/CSV.<br><br>"
+            "Exportador de atividades AdvBox para XLSX.<br><br>"
             f"Config: {config_file()}<br>"
             f"Dados: {db_file().parent}",
         )

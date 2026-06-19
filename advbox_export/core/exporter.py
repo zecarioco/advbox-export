@@ -13,7 +13,6 @@ from typing import Callable
 from advbox_export.core.client import AdvboxClient
 from advbox_export.core.storage import (
     PeriodoArquivo,
-    gerar_csv,
     gerar_xlsx,
     gravar_jsonl_append,
     proximo_caminho_versionado,
@@ -120,7 +119,6 @@ class ExportProgress:
 @dataclass
 class ExportResult:
     xlsx_path: Path
-    csv_path: Path
     total_atividades: int
     duracao_segundos: float
     periodo_inicio: date
@@ -355,14 +353,13 @@ class Exporter:
                 self._salvar_state(state_path, state)
                 janelas_concluidas_nesta_run += 1
 
-            log("INFO", "todas janelas baixadas — gerando XLSX e CSV")
+            log("INFO", "todas janelas baixadas — gerando XLSX")
 
         except ExportCancelado:
             log("WARN", "export cancelado pelo usuário — state preservado pra retomada")
             raise
 
         xlsx_path = proximo_caminho_versionado(self.exports_dir, periodo.slug, ".xlsx")
-        csv_path = xlsx_path.with_suffix(".csv")
         linhas_xlsx = gerar_xlsx(
             jsonl_path,
             xlsx_path,
@@ -370,21 +367,13 @@ class Exporter:
             range_fim_iso=date_to.isoformat(),
             usuarios_permitidos=self._usuarios_permitidos,
         )
-        linhas_csv = gerar_csv(
-            jsonl_path,
-            csv_path,
-            range_inicio_iso=date_from.isoformat(),
-            range_fim_iso=date_to.isoformat(),
-            usuarios_permitidos=self._usuarios_permitidos,
-        )
-        log("INFO", f"gerado {xlsx_path.name} ({linhas_xlsx} linhas) e {csv_path.name} ({linhas_csv} linhas)")
+        log("INFO", f"gerado {xlsx_path.name} ({linhas_xlsx} linhas)")
 
         jsonl_path.unlink(missing_ok=True)
         state_path.unlink(missing_ok=True)
 
         return ExportResult(
             xlsx_path=xlsx_path,
-            csv_path=csv_path,
             total_atividades=linhas_xlsx,
             duracao_segundos=time.monotonic() - inicio_run,
             periodo_inicio=date_from,

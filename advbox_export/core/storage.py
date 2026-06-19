@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import csv
 import json
 from dataclasses import dataclass
 from datetime import date
@@ -290,35 +289,6 @@ def gerar_xlsx(
 
     wb.save(xlsx_path)
     return row_idx - 2
-
-
-def gerar_csv(
-    jsonl_path: Path,
-    csv_path: Path,
-    *,
-    range_inicio_iso: str | None = None,
-    range_fim_iso: str | None = None,
-    usuarios_permitidos: set[str] | None = None,
-) -> int:
-    csv_path.parent.mkdir(parents=True, exist_ok=True)
-    headers = [h for h, _ in COLUNAS]
-    keys = [k for _, k in COLUNAS]
-
-    linhas = _coletar_linhas_ordenadas(
-        jsonl_path,
-        range_inicio_iso=range_inicio_iso,
-        range_fim_iso=range_fim_iso,
-        usuarios_permitidos=usuarios_permitidos,
-    )
-
-    count = 0
-    with csv_path.open("w", encoding="utf-8-sig", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(headers)
-        for linha in linhas:
-            writer.writerow([linha.get(k, "") for k in keys])
-            count += 1
-    return count
 
 
 @dataclass(frozen=True)

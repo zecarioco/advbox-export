@@ -92,7 +92,6 @@ class ExportRepository:
         export_id: int,
         *,
         caminho_xlsx: str,
-        caminho_csv: str,
         caminho_log: str | None,
         total_registros: int,
         duracao_segundos: float,
@@ -103,7 +102,6 @@ class ExportRepository:
                 UPDATE exports SET
                     status = ?,
                     caminho_xlsx = ?,
-                    caminho_csv = ?,
                     caminho_log = ?,
                     total_registros = ?,
                     duracao_segundos = ?,
@@ -113,7 +111,6 @@ class ExportRepository:
                 (
                     STATUS_CONCLUIDO,
                     caminho_xlsx,
-                    caminho_csv,
                     caminho_log,
                     total_registros,
                     duracao_segundos,

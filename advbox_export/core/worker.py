@@ -116,7 +116,6 @@ class ExportWorker(QObject):
         self._repository.marcar_concluido(
             self._export_id,
             caminho_xlsx=str(resultado.xlsx_path),
-            caminho_csv=str(resultado.csv_path),
             caminho_log=str(log_path) if log_path else None,
             total_registros=resultado.total_atividades,
             duracao_segundos=resultado.duracao_segundos,
