@@ -51,6 +51,7 @@ from advbox_export.db import (
     ExportRepository,
     ExportRow,
 )
+from advbox_export.ui.dialogs import confirmar
 from advbox_export.ui.grupos_tab import GruposTab
 from advbox_export.ui.settings_dialog import SettingsDialog
 from advbox_export.ui.theme import apply_theme
@@ -756,16 +757,16 @@ class MainWindow(QMainWindow):
         row = self.repository.obter(export_id)
         if row is None:
             return
-        resposta = QMessageBox.question(
+        if not confirmar(
             self,
-            "Excluir export",
-            f"Excluir o export de {row.periodo_inicio} → {row.periodo_fim}?\n\n"
-            "O registro do histórico e os arquivos (XLSX, log) vão ser removidos.\n"
-            "Esta ação não pode ser desfeita.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if resposta != QMessageBox.StandardButton.Yes:
+            titulo="Excluir export",
+            mensagem=(
+                f"Excluir o export de {row.periodo_inicio} → {row.periodo_fim}?\n\n"
+                "O registro do histórico e os arquivos (XLSX, log) vão ser removidos.\n"
+                "Esta ação não pode ser desfeita."
+            ),
+            theme=self.config_store.load().theme,
+        ):
             return
 
         for caminho in (row.caminho_xlsx, row.caminho_log):
@@ -901,15 +902,17 @@ class MainWindow(QMainWindow):
             event.accept()
             return
 
-        reply = QMessageBox.question(
+        if not confirmar(
             self,
-            "Export em andamento",
-            "Há um export em andamento. Cancelar e sair?\n\n"
-            "O progresso fica salvo e você pode retomar o mesmo período depois. "
-            "Pode levar até ~60s para o cancelamento ser confirmado "
-            "(se estiver esperando rate limit).",
-        )
-        if reply != QMessageBox.StandardButton.Yes:
+            titulo="Export em andamento",
+            mensagem=(
+                "Há um export em andamento. Cancelar e sair?\n\n"
+                "O progresso fica salvo e você pode retomar o mesmo período depois. "
+                "Pode levar até ~60s para o cancelamento ser confirmado "
+                "(se estiver esperando rate limit)."
+            ),
+            theme=self.config_store.load().theme,
+        ):
             event.ignore()
             return
 
@@ -924,17 +927,17 @@ class MainWindow(QMainWindow):
             thread.quit()
             # 70s cobre o pior caso: 60s de espera por 429 + margem
             if not thread.wait(70_000):
-                forcar = QMessageBox.warning(
+                if not confirmar(
                     self,
-                    "Export não respondeu",
-                    "O export ainda está rodando após 70s. "
-                    "Forçar fechamento pode deixar a última página sem gravar "
-                    "(mas a retomada vai pular o que já foi salvo).\n\n"
-                    "Forçar fechamento mesmo assim?",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                    QMessageBox.StandardButton.No,
-                )
-                if forcar != QMessageBox.StandardButton.Yes:
+                    titulo="Export não respondeu",
+                    mensagem=(
+                        "O export ainda está rodando após 70s. "
+                        "Forçar fechamento pode deixar a última página sem gravar "
+                        "(mas a retomada vai pular o que já foi salvo).\n\n"
+                        "Forçar fechamento mesmo assim?"
+                    ),
+                    theme=self.config_store.load().theme,
+                ):
                     event.ignore()
                     return
 

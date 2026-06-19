@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from advbox_export.core.client import AdvboxClient
 from advbox_export.core.config import ConfigStore
+from advbox_export.ui.dialogs import confirmar
 from advbox_export.ui.membros_dialog import MembrosDialog
 
 
@@ -195,16 +196,16 @@ class GruposTab(QWidget):
         self.grupos_alterados.emit()
 
     def _excluir(self, nome: str) -> None:
-        resp = QMessageBox.question(
+        if not confirmar(
             self,
-            "Excluir grupo",
-            f"Excluir o grupo '{nome}'?\n\n"
-            "Os membros continuam cadastrados na AdvBox — só a definição "
-            "do grupo aqui no app vai embora.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if resp != QMessageBox.StandardButton.Yes:
+            titulo="Excluir grupo",
+            mensagem=(
+                f"Excluir o grupo '{nome}'?\n\n"
+                "Os membros continuam cadastrados na AdvBox — só a definição "
+                "do grupo aqui no app vai embora."
+            ),
+            theme=self.config_store.load().theme,
+        ):
             return
         cfg = self.config_store.load()
         cfg.grupos.pop(nome, None)
