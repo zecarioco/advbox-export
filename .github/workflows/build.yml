@@ -149,7 +149,7 @@ jobs:
       - name: Flatten artifacts
         run: |
           mkdir -p release
-          find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' \) -exec cp {} release/ \;
+          find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' -o -name '*.dmg' \) -exec cp {} release/ \;
           ls -la release/
 
       - uses: softprops/action-gh-release@v2
