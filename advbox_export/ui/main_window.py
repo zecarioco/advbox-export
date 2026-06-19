@@ -64,6 +64,11 @@ STATUS_LABEL = {
     STATUS_CANCELADO: "Cancelado",
 }
 
+MESES_PT = [
+    "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+    "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+]
+
 
 class Card(QFrame):
     def __init__(self, titulo: str | None, parent: QWidget | None = None) -> None:
@@ -214,6 +219,10 @@ class MainWindow(QMainWindow):
         self.input_nome = QLineEdit()
         self.input_nome.setPlaceholderText("Ex: Atividades maio 2026")
         self.input_nome.setMaxLength(80)
+        # Marca como manual no primeiro caractere digitado: aí os atalhos
+        # de período param de sobrescrever o nome.
+        self._nome_auto_preenchido = True
+        self.input_nome.textEdited.connect(self._marcar_nome_manual)
         card.add(self.input_nome)
 
         atalhos_label = QLabel("ATALHOS DE PERÍODO")
@@ -453,20 +462,43 @@ class MainWindow(QMainWindow):
     def _range_este_mes(self) -> None:
         hoje = QDate.currentDate()
         self._setar_datas_silenciosamente(QDate(hoje.year(), hoje.month(), 1), hoje)
+        self._aplicar_nome_padrao(
+            f"Atividades {MESES_PT[hoje.month() - 1]} {hoje.year()}"
+        )
 
     def _range_mes_passado(self) -> None:
         hoje = QDate.currentDate()
         primeiro = QDate(hoje.year(), hoje.month(), 1).addMonths(-1)
         ultimo = primeiro.addMonths(1).addDays(-1)
         self._setar_datas_silenciosamente(primeiro, ultimo)
+        self._aplicar_nome_padrao(
+            f"Atividades {MESES_PT[primeiro.month() - 1]} {primeiro.year()}"
+        )
 
     def _range_este_ano(self) -> None:
         hoje = QDate.currentDate()
         self._setar_datas_silenciosamente(QDate(hoje.year(), 1, 1), hoje)
+        self._aplicar_nome_padrao(f"Atividades {hoje.year()}")
 
     def _range_backfill(self) -> None:
         hoje = QDate.currentDate()
-        self._setar_datas_silenciosamente(QDate(hoje.year() - 6, 1, 1), hoje)
+        ano_inicio = hoje.year() - 6
+        self._setar_datas_silenciosamente(QDate(ano_inicio, 1, 1), hoje)
+        self._aplicar_nome_padrao(f"Backfill completo {ano_inicio}-{hoje.year()}")
+
+    def _aplicar_nome_padrao(self, nome: str) -> None:
+        """Preenche o input só se o usuário ainda não digitou nada à mão."""
+        if not self._nome_auto_preenchido and self.input_nome.text().strip():
+            return
+        self.input_nome.blockSignals(True)
+        try:
+            self.input_nome.setText(nome)
+        finally:
+            self.input_nome.blockSignals(False)
+        self._nome_auto_preenchido = True
+
+    def _marcar_nome_manual(self, _texto: str) -> None:
+        self._nome_auto_preenchido = False
 
     def _mudar_tema(self, theme: str) -> None:
         cfg = self.config_store.load()
