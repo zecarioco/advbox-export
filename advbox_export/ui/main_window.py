@@ -433,7 +433,7 @@ class MainWindow(QMainWindow):
         self.tabela.setColumnWidth(2, 180)
         self.tabela.setColumnWidth(3, 70)
         self.tabela.setColumnWidth(4, 100)
-        self.tabela.setColumnWidth(5, 210)
+        self.tabela.setColumnWidth(5, 240)
         self.tabela.setMinimumHeight(320)
         card.add(self.tabela)
 
@@ -709,7 +709,7 @@ class MainWindow(QMainWindow):
         w.setFixedHeight(40)
         h = QHBoxLayout(w)
         h.setContentsMargins(0, 0, 0, 0)
-        h.setSpacing(6)
+        h.setSpacing(10)
 
         h.addSpacing(16)
         for label, path in [
@@ -720,7 +720,8 @@ class MainWindow(QMainWindow):
             btn.setProperty("variant", "outline-sm")
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-            btn.setFixedSize(54, 26)
+            # Sem setFixedSize: o botão cresce pra acomodar texto+padding+borda
+            # sem colidir. setSizePolicy(Fixed, Fixed) impede que estique.
             existe = bool(path) and Path(path).exists() if path else False
             btn.setEnabled(existe)
             if path:
