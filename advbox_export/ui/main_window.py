@@ -404,9 +404,9 @@ class MainWindow(QMainWindow):
 
         card.add_layout(header_row)
 
-        self.tabela = QTableWidget(0, 7)
+        self.tabela = QTableWidget(0, 6)
         self.tabela.setHorizontalHeaderLabels(
-            ["Data", "Nome", "Período", "Total", "Status", "Duração", "Ações"]
+            ["Data", "Nome", "Período", "Total", "Status", "Ações"]
         )
         self.tabela.verticalHeader().setVisible(False)
         self.tabela.verticalHeader().setDefaultSectionSize(48)
@@ -419,12 +419,11 @@ class MainWindow(QMainWindow):
         header.setMinimumSectionSize(70)
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.tabela.setColumnWidth(0, 140)
-        self.tabela.setColumnWidth(2, 210)
-        self.tabela.setColumnWidth(3, 80)
-        self.tabela.setColumnWidth(4, 110)
-        self.tabela.setColumnWidth(5, 80)
-        self.tabela.setColumnWidth(6, 340)
+        self.tabela.setColumnWidth(0, 130)
+        self.tabela.setColumnWidth(2, 180)
+        self.tabela.setColumnWidth(3, 70)
+        self.tabela.setColumnWidth(4, 100)
+        self.tabela.setColumnWidth(5, 270)
         self.tabela.setMinimumHeight(320)
         card.add(self.tabela)
 
@@ -632,9 +631,6 @@ class MainWindow(QMainWindow):
         periodo = f"{row.periodo_inicio} → {row.periodo_fim}"
         total = "" if row.total_registros is None else f"{row.total_registros:,}".replace(",", ".")
         status = STATUS_LABEL.get(row.status, row.status)
-        duracao = (
-            f"{row.duracao_segundos:.0f}s" if row.duracao_segundos is not None else ""
-        )
 
         self.tabela.setItem(i, 0, QTableWidgetItem(data_fmt))
         self.tabela.setItem(i, 1, QTableWidgetItem(row.nome or "—"))
@@ -646,8 +642,7 @@ class MainWindow(QMainWindow):
         if row.erro_mensagem:
             item_status.setToolTip(row.erro_mensagem)
         self.tabela.setItem(i, 4, item_status)
-        self.tabela.setItem(i, 5, QTableWidgetItem(duracao))
-        self.tabela.setCellWidget(i, 6, self._build_acoes_widget(row))
+        self.tabela.setCellWidget(i, 5, self._build_acoes_widget(row))
 
     @staticmethod
     def _format_datetime(iso: str) -> str:
