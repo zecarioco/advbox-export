@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none">
+  <!-- Squircle verde sage (primary do tema) -->
+  <rect width="1024" height="1024" rx="256" ry="256" fill="#3a5a45"/>
+
+  <!-- Folha estilizada (mesmo path do projeto irmão direito-do-campo, escalado 25.6x) -->
+  <path d="M 307.2 665.6
+           c 0 -184.32, 148.48 -332.8, 332.8 -332.8
+           h 76.8
+           v 76.8
+           c 0 184.32, -148.48 332.8, -332.8 332.8
+           h -76.8
+           v -76.8 z"
+        fill="#fefdf8" fill-opacity="0.9"/>
+
+  <!-- Veio da folha -->
+  <path d="M 358.4 614.4 L 563.2 409.6"
+        stroke="#3a5a45" stroke-width="38" stroke-linecap="round"/>
+</svg>

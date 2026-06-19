@@ -27,4 +27,4 @@ build-backend = "setuptools.build_meta"
 include = ["advbox_export*"]
 
 [tool.setuptools.package-data]
-"advbox_export.ui" = ["styles.qss", "styles_dark.qss", "fonts/*.ttf", "icons/*.svg"]
+"advbox_export.ui" = ["styles.qss", "styles_dark.qss", "fonts/*.ttf", "icons/*.svg", "icons/*.png"]

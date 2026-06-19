@@ -55,6 +55,25 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install create-dmg
 
+      - name: Generate ICNS (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          # iconutil vem com Xcode CLI tools (sempre presente no runner macOS)
+          ICONSET=packaging/icons/AdvBoxExport.iconset
+          rm -rf "$ICONSET" && mkdir -p "$ICONSET"
+          cp packaging/icons/icon-16.png   "$ICONSET/icon_16x16.png"
+          cp packaging/icons/icon-32.png   "$ICONSET/icon_16x16@2x.png"
+          cp packaging/icons/icon-32.png   "$ICONSET/icon_32x32.png"
+          cp packaging/icons/icon-64.png   "$ICONSET/icon_32x32@2x.png"
+          cp packaging/icons/icon-128.png  "$ICONSET/icon_128x128.png"
+          cp packaging/icons/icon-256.png  "$ICONSET/icon_128x128@2x.png"
+          cp packaging/icons/icon-256.png  "$ICONSET/icon_256x256.png"
+          cp packaging/icons/icon-512.png  "$ICONSET/icon_256x256@2x.png"
+          cp packaging/icons/icon-512.png  "$ICONSET/icon_512x512.png"
+          cp packaging/icons/icon-1024.png "$ICONSET/icon_512x512@2x.png"
+          iconutil -c icns "$ICONSET" -o packaging/icons/AdvBoxExport.icns
+          rm -rf "$ICONSET"
+
       - name: Build (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -62,6 +81,7 @@ jobs:
             --noconfirm \
             --windowed \
             --name AdvBoxExport \
+            --icon packaging/icons/AdvBoxExport.icns \
             --add-data "advbox_export/ui/styles.qss:advbox_export/ui" \
             --add-data "advbox_export/ui/styles_dark.qss:advbox_export/ui" \
             --add-data "advbox_export/ui/fonts:advbox_export/ui/fonts" \
@@ -99,6 +119,7 @@ jobs:
             --noconfirm `
             --windowed `
             --name AdvBoxExport `
+            --icon packaging/icons/AdvBoxExport.ico `
             --add-data "advbox_export/ui/styles.qss;advbox_export/ui" `
             --add-data "advbox_export/ui/styles_dark.qss;advbox_export/ui" `
             --add-data "advbox_export/ui/fonts;advbox_export/ui/fonts" `
