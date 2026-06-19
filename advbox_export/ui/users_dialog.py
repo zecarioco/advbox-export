@@ -95,7 +95,7 @@ class UsersDialog(QDialog):
         btn_nenhum = QPushButton("Desmarcar todos")
         btn_nenhum.clicked.connect(lambda: self._marcar_visiveis(False))
         for b in (btn_todos, btn_nenhum):
-            b.setProperty("variant", "outline")
+            b.setProperty("variant", "ghost")
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             atalhos.addWidget(b)
         atalhos.addStretch()
@@ -109,9 +109,6 @@ class UsersDialog(QDialog):
             )
             self.btn_refresh.clicked.connect(self._atualizar_lista)
             atalhos.addWidget(self.btn_refresh)
-            self.lbl_ultima_atualizacao = QLabel("")
-            self.lbl_ultima_atualizacao.setObjectName("mutedLabel")
-            atalhos.addWidget(self.lbl_ultima_atualizacao)
         layout.addLayout(atalhos)
 
         scroll = QScrollArea()
@@ -125,9 +122,15 @@ class UsersDialog(QDialog):
         scroll.setWidget(container)
         layout.addWidget(scroll, 1)
 
+        rodape = QHBoxLayout()
         self.lbl_status = QLabel("")
         self.lbl_status.setObjectName("mutedLabel")
-        layout.addWidget(self.lbl_status)
+        rodape.addWidget(self.lbl_status)
+        rodape.addStretch()
+        self.lbl_ultima_atualizacao = QLabel("")
+        self.lbl_ultima_atualizacao.setObjectName("mutedLabel")
+        rodape.addWidget(self.lbl_ultima_atualizacao)
+        layout.addLayout(rodape)
         self._atualizar_status()
 
         botoes = QDialogButtonBox(
