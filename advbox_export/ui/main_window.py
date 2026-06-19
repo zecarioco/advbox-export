@@ -64,12 +64,6 @@ STATUS_LABEL = {
     STATUS_CANCELADO: "Cancelado",
 }
 
-MESES_PT = [
-    "janeiro", "fevereiro", "março", "abril", "maio", "junho",
-    "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
-]
-
-
 class Card(QFrame):
     def __init__(self, titulo: str | None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -217,7 +211,7 @@ class MainWindow(QMainWindow):
         card.add(nome_label)
 
         self.input_nome = QLineEdit()
-        self.input_nome.setPlaceholderText("Ex: Atividades maio 2026")
+        self.input_nome.setPlaceholderText("Ex: ADVBOX2026 - [02/06 - 02/09]")
         self.input_nome.setMaxLength(80)
         # Marca como manual no primeiro caractere digitado: aí os atalhos
         # de período param de sobrescrever o nome.
@@ -261,11 +255,13 @@ class MainWindow(QMainWindow):
         self.input_de.setCalendarPopup(True)
         self.input_de.setDisplayFormat("dd/MM/yyyy")
         self.input_de.dateChanged.connect(self._desmarcar_atalhos)
+        self.input_de.dateChanged.connect(self._regenerar_nome_padrao)
 
         self.input_ate = QDateEdit(hoje)
         self.input_ate.setCalendarPopup(True)
         self.input_ate.setDisplayFormat("dd/MM/yyyy")
         self.input_ate.dateChanged.connect(self._desmarcar_atalhos)
+        self.input_ate.dateChanged.connect(self._regenerar_nome_padrao)
 
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
@@ -310,6 +306,8 @@ class MainWindow(QMainWindow):
         self.btn_exportar.clicked.connect(self._iniciar_export)
         card.add(self.btn_exportar)
 
+        # Nome inicial baseado nas datas defaults (primeiro do mês → hoje).
+        self._regenerar_nome_padrao()
         return card
 
     def _build_alerta_token(self) -> QFrame:
@@ -462,29 +460,45 @@ class MainWindow(QMainWindow):
     def _range_este_mes(self) -> None:
         hoje = QDate.currentDate()
         self._setar_datas_silenciosamente(QDate(hoje.year(), hoje.month(), 1), hoje)
-        self._aplicar_nome_padrao(
-            f"Atividades {MESES_PT[hoje.month() - 1]} {hoje.year()}"
-        )
+        self._regenerar_nome_padrao()
 
     def _range_mes_passado(self) -> None:
         hoje = QDate.currentDate()
         primeiro = QDate(hoje.year(), hoje.month(), 1).addMonths(-1)
         ultimo = primeiro.addMonths(1).addDays(-1)
         self._setar_datas_silenciosamente(primeiro, ultimo)
-        self._aplicar_nome_padrao(
-            f"Atividades {MESES_PT[primeiro.month() - 1]} {primeiro.year()}"
-        )
+        self._regenerar_nome_padrao()
 
     def _range_este_ano(self) -> None:
         hoje = QDate.currentDate()
         self._setar_datas_silenciosamente(QDate(hoje.year(), 1, 1), hoje)
-        self._aplicar_nome_padrao(f"Atividades {hoje.year()}")
+        self._regenerar_nome_padrao()
 
     def _range_backfill(self) -> None:
         hoje = QDate.currentDate()
         ano_inicio = hoje.year() - 6
         self._setar_datas_silenciosamente(QDate(ano_inicio, 1, 1), hoje)
-        self._aplicar_nome_padrao(f"Backfill completo {ano_inicio}-{hoje.year()}")
+        self._regenerar_nome_padrao()
+
+    @staticmethod
+    def _nome_padrao_para_range(de: QDate, ate: QDate) -> str:
+        if de.year() == ate.year():
+            return (
+                f"ADVBOX{de.year()} - "
+                f"[{de.toString('dd/MM')} - {ate.toString('dd/MM')}]"
+            )
+        return (
+            f"ADVBOX{de.year()}-{ate.year()} - "
+            f"[{de.toString('dd/MM/yy')} - {ate.toString('dd/MM/yy')}]"
+        )
+
+    def _regenerar_nome_padrao(self) -> None:
+        """Recalcula o nome a partir do range atual e aplica (se o usuário
+        ainda não digitou nada à mão)."""
+        nome = self._nome_padrao_para_range(
+            self.input_de.date(), self.input_ate.date()
+        )
+        self._aplicar_nome_padrao(nome)
 
     def _aplicar_nome_padrao(self, nome: str) -> None:
         """Preenche o input só se o usuário ainda não digitou nada à mão."""
