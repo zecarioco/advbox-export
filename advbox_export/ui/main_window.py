@@ -824,6 +824,19 @@ class MainWindow(QMainWindow):
         """
         self._atualizar_btn_filtro_users()
 
+    def _buscar_nomes_usuarios_silencioso(self) -> list[str] | None:
+        """Busca /settings.users sem mostrar UI de erro — pra usar como callback
+        de refresh dentro de dialogs (que tratam o None com warning próprio)."""
+        cfg = self.config_store.load()
+        if not cfg.token:
+            return None
+        try:
+            client = AdvboxClient(token=cfg.token, base_url=cfg.base_url)
+            users = client.list_users()
+        except Exception:
+            return None
+        return [u.get("name", "") for u in users if u.get("name")]
+
     def _abrir_filtro_users(self) -> None:
         cfg = self.config_store.load()
         if not cfg.token:
@@ -859,6 +872,7 @@ class MainWindow(QMainWindow):
             grupos=cfg.grupos,
             grupos_marcados=cfg.grupos_selecionados,
             pessoas_marcadas=cfg.pessoas_selecionadas,
+            on_refresh=self._buscar_nomes_usuarios_silencioso,
             parent=self,
         )
         if dlg.exec() != QDialog.DialogCode.Accepted:

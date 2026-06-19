@@ -142,8 +142,8 @@ class GruposTab(QWidget):
 
     # ---- API de usuários (lazy + cache) -----------------------------------
 
-    def _carregar_nomes(self) -> list[str] | None:
-        if self._nomes_cache is not None:
+    def _carregar_nomes(self, *, force: bool = False) -> list[str] | None:
+        if not force and self._nomes_cache is not None:
             return self._nomes_cache
         cfg = self.config_store.load()
         if not cfg.token:
@@ -225,7 +225,13 @@ class GruposTab(QWidget):
             return
         cfg = self.config_store.load()
         atuais = set(cfg.grupos.get(nome, []))
-        dlg = MembrosDialog(grupo=nome, nomes_disponiveis=nomes, marcados_iniciais=atuais, parent=self)
+        dlg = MembrosDialog(
+            grupo=nome,
+            nomes_disponiveis=nomes,
+            marcados_iniciais=atuais,
+            on_refresh=lambda: self._carregar_nomes(force=True),
+            parent=self,
+        )
         from PySide6.QtWidgets import QDialog
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
