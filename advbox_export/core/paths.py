@@ -5,7 +5,7 @@ from pathlib import Path
 from platformdirs import PlatformDirs
 
 APP_NAME = "AdvBoxExport"
-APP_AUTHOR = "MaldonadoAdv"
+APP_AUTHOR = "zecarioco"
 
 _dirs = PlatformDirs(appname=APP_NAME, appauthor=APP_AUTHOR, roaming=True)
 
@@ -15,7 +15,7 @@ def config_dir() -> Path:
 
     Linux:   ~/.config/AdvBoxExport
     macOS:   ~/Library/Application Support/AdvBoxExport
-    Windows: %APPDATA%/MaldonadoAdv/AdvBoxExport
+    Windows: %APPDATA%/zecarioco/AdvBoxExport
     """
     p = Path(_dirs.user_config_dir)
     p.mkdir(parents=True, exist_ok=True)

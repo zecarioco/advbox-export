@@ -8,13 +8,15 @@ Baixe o pacote do seu sistema na página de [Releases](../../releases) mais rece
 
 | Sistema | Arquivo |
 |---|---|
-| Windows 10/11 | `AdvBoxExport-windows.zip` |
+| Windows 10/11 | `AdvBoxExport-Setup.exe` |
 | macOS 12+ (Apple Silicon) | `AdvBoxExport-macos.dmg` |
-| Linux | `AdvBoxExport-linux.tar.gz` |
+| Linux (Ubuntu/Debian) | `AdvBoxExport-linux.deb` |
 
 ### Windows
-1. Extraia o `.zip` em qualquer pasta (ex.: `C:\Programas\AdvBoxExport`).
-2. Crie um atalho de `AdvBoxExport.exe` na área de trabalho.
+1. Abra `AdvBoxExport-Setup.exe` (duplo clique) e siga o assistente — instala em Program Files, cria atalho no Menu Iniciar e (opcional) na Área de Trabalho.
+2. Abra **AdvBox Export** pelo Menu Iniciar ou digitando "AdvBox" na busca do Windows.
+
+> O instalador não pede permissão de administrador (instala no perfil do usuário por padrão). Pra desinstalar: **Configurações → Apps → AdvBox Export → Desinstalar**.
 
 ### macOS (Apple Silicon — M1/M2/M3/M4)
 1. Abra o `AdvBoxExport-macos.dmg`. Uma janela com o ícone do app aparece.
@@ -37,13 +39,17 @@ Saída em 2 passos:
 
 Esse passo extra também só precisa ser feito uma vez.
 
-### Linux
-1. Extraia o `.tar.gz` em `~/Programas/`:
+### Linux (Ubuntu, Debian, Mint, Pop!_OS, etc.)
+1. Instale o `.deb`:
    ```bash
-   mkdir -p ~/Programas && tar -xzf AdvBoxExport-linux.tar.gz -C ~/Programas/
+   sudo apt install ./AdvBoxExport-linux.deb
    ```
-2. Rode com `~/Programas/AdvBoxExport/AdvBoxExport`.
-3. (Opcional) Crie atalho no menu de aplicativos.
+   Ou: duplo clique no arquivo, que abre no Software Center / Discover.
+2. Abra **AdvBox Export** pelas Atividades / menu de aplicativos (busca por "AdvBox").
+   Ou no terminal: `advbox-export`.
+
+> Pra desinstalar: `sudo apt remove advbox-export`.
+> Pra Fedora/Arch/openSUSE: por enquanto não temos pacote nativo — abra uma issue se precisar.
 
 ## Primeira execução
 
@@ -83,9 +89,9 @@ Grupos cadastrados aqui ficam disponíveis no botão **Destinatários** da aba E
 
 | O quê | Linux | macOS | Windows |
 |---|---|---|---|
-| Configuração | `~/.config/AdvBoxExport/config.json` | `~/Library/Application Support/AdvBoxExport/config.json` | `%APPDATA%\MaldonadoAdv\AdvBoxExport\config.json` |
-| Histórico (DB) | `~/.local/share/AdvBoxExport/advbox.db` | `~/Library/Application Support/AdvBoxExport/advbox.db` | `%LOCALAPPDATA%\MaldonadoAdv\AdvBoxExport\advbox.db` |
-| Planilhas geradas | `~/.local/share/AdvBoxExport/exports/` | `~/Library/Application Support/AdvBoxExport/exports/` | `%LOCALAPPDATA%\MaldonadoAdv\AdvBoxExport\exports\` |
+| Configuração | `~/.config/AdvBoxExport/config.json` | `~/Library/Application Support/AdvBoxExport/config.json` | `%APPDATA%\zecarioco\AdvBoxExport\config.json` |
+| Histórico (DB) | `~/.local/share/AdvBoxExport/advbox.db` | `~/Library/Application Support/AdvBoxExport/advbox.db` | `%LOCALAPPDATA%\zecarioco\AdvBoxExport\advbox.db` |
+| Planilhas geradas | `~/.local/share/AdvBoxExport/exports/` | `~/Library/Application Support/AdvBoxExport/exports/` | `%LOCALAPPDATA%\zecarioco\AdvBoxExport\exports\` |
 
 Pra abrir a pasta das planilhas: **Histórico → Abrir pasta de exports**.
 

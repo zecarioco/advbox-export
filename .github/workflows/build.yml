@@ -15,11 +15,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-22.04
-            artifact_name: AdvBoxExport-linux.tar.gz
+            artifact_name: AdvBoxExport-linux.deb
           - os: macos-latest
             artifact_name: AdvBoxExport-macos.dmg
           - os: windows-latest
-            artifact_name: AdvBoxExport-windows.zip
+            artifact_name: AdvBoxExport-Setup.exe
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -36,6 +36,19 @@ jobs:
           uv venv
           uv pip install -e ".[build]"
 
+      - name: Read version from pyproject (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          VERSION=$(grep -E '^version\s*=' pyproject.toml | head -1 | sed -E 's/version\s*=\s*"([^"]+)"/\1/')
+          echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Read version from pyproject (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path pyproject.toml -Pattern '^version\s*=\s*"([^"]+)"').Matches.Groups[1].Value
+          "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       - name: Build (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -48,8 +61,7 @@ jobs:
             --add-data "advbox_export/ui/fonts:advbox_export/ui/fonts" \
             --add-data "advbox_export/ui/icons:advbox_export/ui/icons" \
             advbox_export/__main__.py
-          cd dist
-          tar -czf ../AdvBoxExport-linux.tar.gz AdvBoxExport
+          bash packaging/linux/build-deb.sh "$APP_VERSION"
 
       - name: Install create-dmg (macOS)
         if: runner.os == 'macOS'
@@ -111,6 +123,11 @@ jobs:
             AdvBoxExport-macos.dmg \
             dmg-staging/
 
+      - name: Install Inno Setup (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
       - name: Build (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -125,7 +142,9 @@ jobs:
             --add-data "advbox_export/ui/fonts;advbox_export/ui/fonts" `
             --add-data "advbox_export/ui/icons;advbox_export/ui/icons" `
             advbox_export/__main__.py
-          Compress-Archive -Path dist\AdvBoxExport -DestinationPath AdvBoxExport-windows.zip
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            "/DAppVersion=$env:APP_VERSION" `
+            packaging\windows\AdvBoxExport.iss
 
       - uses: actions/upload-artifact@v4
         with:
@@ -149,7 +168,7 @@ jobs:
       - name: Flatten artifacts
         run: |
           mkdir -p release
-          find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' -o -name '*.dmg' \) -exec cp {} release/ \;
+          find artifacts -type f \( -name '*.deb' -o -name '*.dmg' -o -name '*.exe' \) -exec cp {} release/ \;
           ls -la release/
 
       - uses: softprops/action-gh-release@v2
