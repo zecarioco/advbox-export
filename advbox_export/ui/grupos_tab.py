@@ -173,8 +173,15 @@ class GruposTab(QWidget):
         self.config_store.save(cfg)
         self._refresh()
         self.grupos_alterados.emit()
-        # Abre o editor de pessoas direto, pra fluir o cadastro
-        self._editar_pessoas(nome)
+        # Abre o editor de pessoas direto, pra fluir o cadastro.
+        # Se cancelar, desfaz a criação — não deixa grupo vazio órfão.
+        if not self._editar_pessoas(nome):
+            cfg = self.config_store.load()
+            cfg.grupos.pop(nome, None)
+            cfg.grupos_selecionados = [g for g in cfg.grupos_selecionados if g != nome]
+            self.config_store.save(cfg)
+            self._refresh()
+            self.grupos_alterados.emit()
 
     def _renomear(self, antigo: str) -> None:
         novo, ok = QInputDialog.getText(
@@ -214,7 +221,8 @@ class GruposTab(QWidget):
         self._refresh()
         self.grupos_alterados.emit()
 
-    def _editar_pessoas(self, nome: str) -> None:
+    def _editar_pessoas(self, nome: str) -> bool:
+        """Retorna True se o usuário salvou, False se cancelou."""
         nomes = self._carregar_nomes()
         if nomes is None:
             QMessageBox.warning(
@@ -223,7 +231,7 @@ class GruposTab(QWidget):
                 "Não foi possível carregar a lista de usuários da AdvBox. "
                 "Verifique o token em Configurações.",
             )
-            return
+            return False
         cfg = self.config_store.load()
         atuais = set(cfg.grupos.get(nome, []))
         dlg = MembrosDialog(
@@ -235,8 +243,9 @@ class GruposTab(QWidget):
         )
         from PySide6.QtWidgets import QDialog
         if dlg.exec() != QDialog.DialogCode.Accepted:
-            return
+            return False
         cfg.grupos[nome] = sorted(dlg.selecionados())
         self.config_store.save(cfg)
         self._refresh()
         self.grupos_alterados.emit()
+        return True
