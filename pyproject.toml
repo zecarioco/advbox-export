@@ -1,6 +1,6 @@
 [project]
 name = "advbox-export"
-version = "0.1.0"
+version = "0.1.1"
 description = "Exportador de atividades da AdvBox com UI desktop"
 requires-python = ">=3.10"
 dependencies = [
