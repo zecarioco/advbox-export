@@ -10,7 +10,9 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-# Espelha exatamente as 17 colunas do export do painel AdvBox.
+# Espelha as 17 colunas do export do painel AdvBox + "Status" (extensão
+# nossa pra identificar No prazo / Atrasada / Em aberto a partir do
+# cruzamento de completed × date_deadline × hoje).
 COLUNAS: list[tuple[str, str]] = [
     ("Prioridade", "_prioridade"),
     ("Data", "_data"),
@@ -19,6 +21,7 @@ COLUNAS: list[tuple[str, str]] = [
     ("Hora Término", "_termino_hora"),
     ("Prazo fatal", "_prazo_fatal"),
     ("Data Conclusão", "_data_conclusao"),
+    ("Status", "_status"),
     ("Pontuação", "reward"),
     ("Compromisso", "task"),
     ("Local", "local"),
@@ -30,6 +33,38 @@ COLUNAS: list[tuple[str, str]] = [
     ("Tipo de ação", "_tipo_acao"),
     ("Observações", "notes"),
 ]
+
+STATUS_NO_PRAZO = "No prazo"
+STATUS_ATRASADA = "Atrasada"
+STATUS_CONCLUIDA = "Concluída"
+STATUS_EM_ABERTO = "Em aberto"
+STATUS_EM_ABERTO_ATRASADA = "Em aberto atrasada"
+
+
+def _calcular_status(
+    completed_raw: Any, deadline_raw: Any, hoje_iso: str
+) -> str:
+    """Compara completed × deadline × hoje pra classificar a linha.
+
+    - completed + dentro do prazo  → No prazo
+    - completed + fora do prazo    → Atrasada
+    - completed + sem prazo        → Concluída
+    - aberta + prazo já passou     → Em aberto atrasada
+    - aberta + prazo no futuro/null → Em aberto
+    """
+    completed_dia = (
+        completed_raw[:10] if isinstance(completed_raw, str) and completed_raw else None
+    )
+    deadline_dia = (
+        deadline_raw[:10] if isinstance(deadline_raw, str) and deadline_raw else None
+    )
+    if completed_dia:
+        if deadline_dia:
+            return STATUS_NO_PRAZO if completed_dia <= deadline_dia else STATUS_ATRASADA
+        return STATUS_CONCLUIDA
+    if deadline_dia and deadline_dia < hoje_iso:
+        return STATUS_EM_ABERTO_ATRASADA
+    return STATUS_EM_ABERTO
 
 # Ocultas no XLSX, fora do CSV. Servem pra você inspecionar atividades
 # atípicas sem precisar abrir o JSONL bruto.
@@ -46,32 +81,37 @@ def expandir_atividade(
     range_inicio_iso: str | None = None,
     range_fim_iso: str | None = None,
     usuarios_permitidos: set[str] | None = None,
+    hoje_iso: str | None = None,
 ) -> Iterable[dict[str, Any]]:
-    """Emite uma linha por user que completou a atividade, igual ao painel.
+    """Emite uma linha por user designado da atividade.
 
-    O painel da AdvBox não emite 1 linha por atividade — emite 1 linha por
-    (atividade, user com completed != null). Quando 2 pessoas concluíram a
-    mesma tarefa, viram 2 linhas, cada uma com seu próprio Destinatário,
-    Data Conclusão, Término/Hora Término e Prioridade (do user específico).
+    Pra cada user no array `users`: emite uma linha. Se o user concluiu,
+    Data Conclusão/Término ficam preenchidos; se não, ficam vazios e a
+    coluna Status mostra 'Em aberto' (ou 'Em aberto atrasada' se o prazo
+    já passou). Isso permite o export funcionar como relatório completo
+    do período, não apenas como relatório de produtividade concluída.
 
-    Se range_inicio_iso/range_fim_iso forem passados, descarta users cuja
-    data de conclusão caia fora do range — replica o filtro "Concluídas em
-    [intervalo]" do painel.
-
-    Mapeamento auditado contra planilha real do painel: 973/1000 linhas
-    batem 1-pra-1 (resto são strings truncadas pelo painel).
+    Os parâmetros range_inicio_iso/range_fim_iso são aceitos por
+    compatibilidade mas não filtram — quem filtra é a API (via
+    completed_start/end ou deadline_start/end dependendo do modo da
+    janela em /posts).
     """
+    if hoje_iso is None:
+        hoje_iso = date.today().isoformat()
+
     lawsuit = atividade.get("lawsuit") or {}
     customers = lawsuit.get("customers") or []
     users = atividade.get("users") or []
 
-    data, hora = _split_datetime(atividade.get("date"))
+    date_raw = atividade.get("date")
+    data, hora = _split_datetime(date_raw)
+    deadline_raw = atividade.get("date_deadline")
 
     base = {
         "id": atividade.get("id"),
         "_data": data,
         "_hora": hora,
-        "_prazo_fatal": _formatar_data(atividade.get("date_deadline")),
+        "_prazo_fatal": _formatar_data(deadline_raw),
         "reward": atividade.get("reward"),
         "task": atividade.get("task"),
         "local": atividade.get("local"),
@@ -89,23 +129,21 @@ def expandir_atividade(
     }
 
     for u in users:
-        completed = u.get("completed")
         nome = u.get("name")
-        if not completed or not isinstance(completed, str) or not nome:
+        if not nome:
             continue
         if usuarios_permitidos is not None and nome not in usuarios_permitidos:
             continue
-        dia = completed[:10]
-        if range_inicio_iso and dia < range_inicio_iso:
-            continue
-        if range_fim_iso and dia > range_fim_iso:
-            continue
 
-        fim_data, fim_hora = _split_datetime(completed)
-        if fim_data and fim_hora:
-            data_conclusao = f"{fim_data} {fim_hora}"
-        else:
-            data_conclusao = fim_data or ""
+        completed = u.get("completed") if isinstance(u.get("completed"), str) else None
+
+        fim_data, fim_hora = ("", "")
+        data_conclusao = ""
+        if completed:
+            fim_data, fim_hora = _split_datetime(completed)
+            data_conclusao = (
+                f"{fim_data} {fim_hora}" if fim_data and fim_hora else (fim_data or "")
+            )
 
         linha = dict(base)
         linha["_prioridade"] = _prioridade_do_user(u)
@@ -113,9 +151,11 @@ def expandir_atividade(
         linha["_termino_data"] = fim_data
         linha["_termino_hora"] = fim_hora
         linha["_data_conclusao"] = data_conclusao
-        # ISO original do completed — preserva pra ordenação estável
-        # (o _data_conclusao formatado em pt-BR não é ordenável lexicograficamente).
-        linha["_sort_key"] = completed
+        linha["_status"] = _calcular_status(completed, deadline_raw, hoje_iso)
+        # Ordenação: concluídas pela data de conclusão; abertas pelo prazo
+        # (ou pela date) — assim relatório agrupa "feitas em ordem" + "abertas
+        # por prazo iminente".
+        linha["_sort_key"] = completed or deadline_raw or date_raw or ""
         yield linha
 
 
@@ -183,15 +223,26 @@ def _coletar_linhas_ordenadas(
     range_fim_iso: str | None,
     usuarios_permitidos: set[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Lê o JSONL, expande user-completados, ordena ASC por Data Conclusão.
+    """Lê o JSONL, deduplica por atividade.id, expande, ordena ASC.
+
+    Como o exporter faz 2 queries por janela (uma por `completed_start/end`,
+    outra por `deadline_start/end`), uma mesma atividade pode aparecer 2
+    vezes no JSONL. Dedup por `id` mantém só a primeira ocorrência — o
+    array `users` da atividade é igual em ambas as respostas, então não
+    perdemos informação.
 
     A API entrega atividades em ordem ~DESC por id e o painel da AdvBox
-    apresenta o export ordenado ASC por Data Conclusão — usa o `_sort_key`
-    ISO injetado em `expandir_atividade` pra ordenação estável (igual ao
-    painel: tarefa concluída primeiro fica em cima).
+    apresenta o export ordenado ASC por Data Conclusão. Usamos o
+    `_sort_key` ISO (completed → deadline → date) pra ordenação estável.
     """
     linhas: list[dict[str, Any]] = []
+    ids_vistos: set[Any] = set()
     for atividade in ler_jsonl(jsonl_path):
+        aid = atividade.get("id")
+        if aid is not None and aid in ids_vistos:
+            continue
+        if aid is not None:
+            ids_vistos.add(aid)
         linhas.extend(
             expandir_atividade(
                 atividade,
@@ -265,6 +316,7 @@ def gerar_xlsx(
         14,  # Hora Término
         14,  # Prazo fatal
         20,  # Data Conclusão
+        20,  # Status
         12,  # Pontuação
         36,  # Compromisso
         18,  # Local

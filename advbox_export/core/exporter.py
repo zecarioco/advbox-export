@@ -49,25 +49,40 @@ CHAVES_ATIVIDADE_CONHECIDAS = {
 }
 
 
+MODO_COMPLETED = "completed"
+MODO_DEADLINE = "deadline"
+
+
 @dataclass
 class Janela:
     inicio: str  # YYYY-MM-DD
     fim: str
+    modo: str = MODO_COMPLETED  # "completed" ou "deadline"
 
     def label(self) -> str:
-        """Label legível usado pra dedup de janelas concluídas.
+        """Label legível usado pra dedup de janelas concluídas no state.
 
-        Mês inteiro fechado vira 'YYYY-MM'. Qualquer outra coisa (incluindo
-        sub-janelas após split) vira o range completo — caso contrário 2
-        sub-janelas do mesmo mês teriam o mesmo label e a 2ª seria pulada.
+        Prefixado pelo modo pra que a mesma janela rodada em modos
+        diferentes (concluídas vs prazo) seja considerada janelas
+        distintas — senão a 2ª seria pulada no resume.
         """
         if self.inicio == self.fim:
-            return self.inicio
-        if self.inicio[:7] == self.fim[:7] and self.inicio.endswith("-01"):
+            base = self.inicio
+        elif self.inicio[:7] == self.fim[:7] and self.inicio.endswith("-01"):
             ultimo = calendar.monthrange(int(self.fim[:4]), int(self.fim[5:7]))[1]
             if int(self.fim[8:10]) == ultimo:
-                return self.inicio[:7]
-        return f"{self.inicio} → {self.fim}"
+                base = self.inicio[:7]
+            else:
+                base = f"{self.inicio} → {self.fim}"
+        else:
+            base = f"{self.inicio} → {self.fim}"
+        return f"{self.modo}:{base}"
+
+    def filtros_api(self) -> dict[str, str]:
+        """Kwargs pra client.list_atividades de acordo com o modo."""
+        if self.modo == MODO_DEADLINE:
+            return {"deadline_start": self.inicio, "deadline_end": self.fim}
+        return {"completed_start": self.inicio, "completed_end": self.fim}
 
 
 @dataclass
@@ -134,7 +149,9 @@ ProgressCallback = Callable[[ExportProgress], None]
 StopChecker = Callable[[], bool]
 
 
-def _janelas_mensais(inicio: date, fim: date) -> list[Janela]:
+def _janelas_mensais(
+    inicio: date, fim: date, modo: str = MODO_COMPLETED
+) -> list[Janela]:
     """Divide [inicio, fim] em janelas mensais fechadas pelos limites."""
     if fim < inicio:
         raise ValueError(f"fim {fim} é anterior a inicio {inicio}")
@@ -146,7 +163,7 @@ def _janelas_mensais(inicio: date, fim: date) -> list[Janela]:
         fim_mes = date(cursor.year, cursor.month, ultimo_dia_mes)
         fim_janela = min(fim_mes, fim)
         janelas.append(
-            Janela(inicio=cursor.isoformat(), fim=fim_janela.isoformat())
+            Janela(inicio=cursor.isoformat(), fim=fim_janela.isoformat(), modo=modo)
         )
         if cursor.month == 12:
             cursor = date(cursor.year + 1, 1, 1)
@@ -164,8 +181,12 @@ def _subdividir_janela(janela: Janela) -> list[Janela] | None:
     delta_dias = (fim - inicio).days
     meio = inicio + timedelta(days=delta_dias // 2)
     return [
-        Janela(inicio=inicio.isoformat(), fim=meio.isoformat()),
-        Janela(inicio=(meio + timedelta(days=1)).isoformat(), fim=fim.isoformat()),
+        Janela(inicio=inicio.isoformat(), fim=meio.isoformat(), modo=janela.modo),
+        Janela(
+            inicio=(meio + timedelta(days=1)).isoformat(),
+            fim=fim.isoformat(),
+            modo=janela.modo,
+        ),
     ]
 
 
@@ -246,7 +267,13 @@ class Exporter:
             state_path.unlink(missing_ok=True)
             state = None
 
-        janelas_iniciais = _janelas_mensais(date_from, date_to)
+        # Duas passadas: 1ª pra concluídas no período (relatório de produtividade),
+        # 2ª pra tarefas com prazo no período (cobre as ainda em aberto). Dedup
+        # por atividade.id acontece em storage._coletar_linhas_ordenadas.
+        janelas_iniciais = (
+            _janelas_mensais(date_from, date_to, modo=MODO_COMPLETED)
+            + _janelas_mensais(date_from, date_to, modo=MODO_DEADLINE)
+        )
 
         if state is None:
             jsonl_path = self.exports_dir / f".tmp_{periodo.slug}_atividades.jsonl"
@@ -543,8 +570,7 @@ class Exporter:
             raise ExportCancelado()
         try:
             r = self.client.list_atividades(
-                completed_start=janela.inicio,
-                completed_end=janela.fim,
+                **janela.filtros_api(),
                 limit=1,
                 offset=0,
             )
@@ -580,8 +606,7 @@ class Exporter:
                 raise ExportCancelado()
 
             resposta = self.client.list_atividades(
-                completed_start=janela.inicio,
-                completed_end=janela.fim,
+                **janela.filtros_api(),
                 limit=PAGE_SIZE,
                 offset=offset,
             )

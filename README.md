@@ -74,6 +74,29 @@ O token fica gravado em arquivo de configuração do seu usuário e não precisa
 
 A API da AdvBox limita 30 requisições por minuto — exports grandes (ex.: 45.000 atividades) levam cerca de 25 minutos. O app respeita esse limite automaticamente e pode ser **cancelado a qualquer momento**; ao rodar de novo o mesmo período, ele retoma do ponto onde parou.
 
+### O que entra no export
+
+O export faz **duas passadas** pra cada período:
+
+1. **Tarefas concluídas no período** (filtro `completed`) — relatório de produtividade
+2. **Tarefas com prazo no período ainda em aberto** (filtro `deadline`) — backlog/atrasadas
+
+Dedup por ID garante que tarefas que aparecem em ambas as passadas não se repitam. Isso significa que o export inclui tanto **o que foi entregue** quanto **o que ficou pra trás**, num único XLSX.
+
+A coluna **"Status"** identifica cada caso:
+
+| Status | Significado |
+|---|---|
+| **No prazo** | Concluída antes ou no prazo fatal |
+| **Atrasada** | Concluída depois do prazo fatal |
+| **Concluída** | Concluída, mas a tarefa não tinha prazo definido |
+| **Em aberto** | Ainda não concluída, prazo no futuro (ou sem prazo) |
+| **Em aberto atrasada** | Ainda não concluída, prazo já passou |
+
+Pra cada tarefa, é emitida uma linha por destinatário. Tarefas em aberto mostram `Data Conclusão` vazia.
+
+> **Custo de tempo**: como o export faz 2 queries por mês de período, o tempo total fica aproximadamente **2× o de antes**. Ex: backfill 6 anos que antes levava ~25 min agora leva ~50 min.
+
 ### Aba Grupos
 
 A API da AdvBox não expõe a estrutura de equipes do painel, então o app permite cadastrar grupos manualmente. Cada grupo é uma lista de nomes da própria AdvBox (os mesmos 51 usuários cadastrados no `/settings.users`).
