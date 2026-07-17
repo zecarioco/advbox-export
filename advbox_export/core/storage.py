@@ -10,18 +10,20 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-# Espelha as 17 colunas do export do painel AdvBox + "Status" (extensão
-# nossa pra identificar No prazo / Atrasada / Em aberto a partir do
-# cruzamento de completed × date_deadline × hoje).
+# Espelha as 17 colunas do export do painel AdvBox + "Estado" e "Prazo"
+# (extensões nossas pra classificar concluída/aberta × no prazo/atrasada
+# a partir do cruzamento completed × date_deadline × hoje).
 COLUNAS: list[tuple[str, str]] = [
+    ("Data criada", "_data_criada"),
     ("Prioridade", "_prioridade"),
-    ("Data", "_data"),
+    ("Data agendada", "_data"),
     ("Hora", "_hora"),
     ("Término", "_termino_data"),
     ("Hora Término", "_termino_hora"),
     ("Prazo fatal", "_prazo_fatal"),
     ("Data Conclusão", "_data_conclusao"),
-    ("Status", "_status"),
+    ("Estado", "_estado"),
+    ("Prazo", "_prazo_status"),
     ("Pontuação", "reward"),
     ("Compromisso", "task"),
     ("Local", "local"),
@@ -34,37 +36,43 @@ COLUNAS: list[tuple[str, str]] = [
     ("Observações", "notes"),
 ]
 
-STATUS_NO_PRAZO = "No prazo"
-STATUS_ATRASADA = "Atrasada"
-STATUS_CONCLUIDA = "Concluída"
-STATUS_EM_ABERTO = "Em aberto"
-STATUS_EM_ABERTO_ATRASADA = "Em aberto atrasada"
+# Estado: completou ou ainda está em aberto
+ESTADO_CONCLUIDA = "Concluída"
+ESTADO_EM_ABERTO = "Em aberto"
+
+# Prazo: relação entre conclusão (ou hoje, se ainda aberta) e o deadline
+PRAZO_NO_PRAZO = "No prazo"
+PRAZO_ATRASADA = "Atrasada"
+PRAZO_SEM_PRAZO = "Sem prazo"
 
 
-def _calcular_status(
-    completed_raw: Any, deadline_raw: Any, hoje_iso: str
+def _calcular_estado(completed_raw: Any) -> str:
+    if isinstance(completed_raw, str) and completed_raw:
+        return ESTADO_CONCLUIDA
+    return ESTADO_EM_ABERTO
+
+
+def _calcular_prazo(
+    completed_raw: Any, date_agendada_raw: Any, hoje_iso: str
 ) -> str:
-    """Compara completed × deadline × hoje pra classificar a linha.
+    """Compara conclusão (ou hoje) com a data agendada pra classificar o prazo.
 
-    - completed + dentro do prazo  → No prazo
-    - completed + fora do prazo    → Atrasada
-    - completed + sem prazo        → Concluída
-    - aberta + prazo já passou     → Em aberto atrasada
-    - aberta + prazo no futuro/null → Em aberto
+    Critério: a tarefa foi agendada pra acontecer numa data; se foi concluída
+    depois dessa data, é atrasada — independente do `date_deadline`.
+
+    - sem date agendada              → Sem prazo
+    - concluída <= data agendada     → No prazo
+    - concluída > data agendada      → Atrasada
+    - em aberto, agendada no futuro  → No prazo
+    - em aberto, agendada já passou  → Atrasada
     """
-    completed_dia = (
-        completed_raw[:10] if isinstance(completed_raw, str) and completed_raw else None
-    )
-    deadline_dia = (
-        deadline_raw[:10] if isinstance(deadline_raw, str) and deadline_raw else None
-    )
-    if completed_dia:
-        if deadline_dia:
-            return STATUS_NO_PRAZO if completed_dia <= deadline_dia else STATUS_ATRASADA
-        return STATUS_CONCLUIDA
-    if deadline_dia and deadline_dia < hoje_iso:
-        return STATUS_EM_ABERTO_ATRASADA
-    return STATUS_EM_ABERTO
+    if not isinstance(date_agendada_raw, str) or not date_agendada_raw:
+        return PRAZO_SEM_PRAZO
+    agendada_dia = date_agendada_raw[:10]
+    if isinstance(completed_raw, str) and completed_raw:
+        completed_dia = completed_raw[:10]
+        return PRAZO_NO_PRAZO if completed_dia <= agendada_dia else PRAZO_ATRASADA
+    return PRAZO_ATRASADA if agendada_dia < hoje_iso else PRAZO_NO_PRAZO
 
 # Ocultas no XLSX, fora do CSV. Servem pra você inspecionar atividades
 # atípicas sem precisar abrir o JSONL bruto.
@@ -109,6 +117,7 @@ def expandir_atividade(
 
     base = {
         "id": atividade.get("id"),
+        "_data_criada": _formatar_data(atividade.get("created_at")),
         "_data": data,
         "_hora": hora,
         "_prazo_fatal": _formatar_data(deadline_raw),
@@ -151,7 +160,8 @@ def expandir_atividade(
         linha["_termino_data"] = fim_data
         linha["_termino_hora"] = fim_hora
         linha["_data_conclusao"] = data_conclusao
-        linha["_status"] = _calcular_status(completed, deadline_raw, hoje_iso)
+        linha["_estado"] = _calcular_estado(completed)
+        linha["_prazo_status"] = _calcular_prazo(completed, date_raw, hoje_iso)
         # Ordenação: concluídas pela data de conclusão; abertas pelo prazo
         # (ou pela date) — assim relatório agrupa "feitas em ordem" + "abertas
         # por prazo iminente".
@@ -272,6 +282,17 @@ def gerar_xlsx(
     header_font = Font(bold=True, color="FFFFFF")
     header_fill = PatternFill("solid", fgColor="2E5BBA")
 
+    # Cores das colunas Estado/Prazo — tons claros pra não competir com o texto.
+    estado_fills = {
+        ESTADO_CONCLUIDA: PatternFill("solid", fgColor="D1FAE5"),  # verde claro
+        ESTADO_EM_ABERTO: PatternFill("solid", fgColor="FEF3C7"),  # amarelo claro
+    }
+    prazo_fills = {
+        PRAZO_NO_PRAZO: PatternFill("solid", fgColor="D1FAE5"),  # verde claro
+        PRAZO_ATRASADA: PatternFill("solid", fgColor="FEE2E2"),  # vermelho claro
+        PRAZO_SEM_PRAZO: PatternFill("solid", fgColor="F3F4F6"),  # cinza claro
+    }
+
     colunas_xlsx = COLUNAS + COLUNAS_DEBUG_XLSX
 
     for col_idx, (header, _) in enumerate(colunas_xlsx, start=1):
@@ -302,6 +323,14 @@ def gerar_xlsx(
         for col_idx, (_, key) in enumerate(colunas_xlsx, start=1):
             cell = ws.cell(row=row_idx, column=col_idx, value=linha.get(key))
             cell.alignment = alinhamento_sem_wrap
+            if key == "_estado":
+                fill = estado_fills.get(linha.get("_estado"))
+                if fill:
+                    cell.fill = fill
+            elif key == "_prazo_status":
+                fill = prazo_fills.get(linha.get("_prazo_status"))
+                if fill:
+                    cell.fill = fill
         # Cinta dupla: defaultRowHeight + height por linha. Alguns leitores
         # respeitam um, outros respeitam o outro — setando ambos garantimos
         # que '\n' embutido em Observações nunca expanda a linha.
@@ -309,14 +338,16 @@ def gerar_xlsx(
         row_idx += 1
 
     larguras_visiveis = [
+        14,  # Data criada
         12,  # Prioridade
-        12,  # Data
+        14,  # Data agendada
         10,  # Hora
         12,  # Término
         14,  # Hora Término
         14,  # Prazo fatal
         20,  # Data Conclusão
-        20,  # Status
+        12,  # Estado
+        12,  # Prazo
         12,  # Pontuação
         36,  # Compromisso
         18,  # Local
@@ -339,8 +370,127 @@ def gerar_xlsx(
         ws.column_dimensions[col_letter].width = 80
         ws.column_dimensions[col_letter].hidden = True
 
+    # AutoFilter no header — dropdowns em cada coluna visível pro user filtrar
+    # sem regerar o export. Cobre só até a última coluna visível (ignora debug).
+    if row_idx > 2:
+        ultima_col_visivel = get_column_letter(len(COLUNAS))
+        ws.auto_filter.ref = f"A1:{ultima_col_visivel}{row_idx - 1}"
+
+    # Aba "Resumo" na frente com contagens totais + breakdown por destinatário.
+    _montar_aba_resumo(wb, linhas, estado_fills, prazo_fills)
+
     wb.save(xlsx_path)
     return row_idx - 2
+
+
+def _montar_aba_resumo(
+    wb: Workbook,
+    linhas: list[dict[str, Any]],
+    estado_fills: dict[str, PatternFill],
+    prazo_fills: dict[str, PatternFill],
+) -> None:
+    """Cria uma aba 'Resumo' antes da 'Atividades' com contagens agregadas.
+
+    Blocos:
+      1. Total geral
+      2. Breakdown por (Estado × Prazo)
+      3. Tabela por destinatário
+    """
+    ws = wb.create_sheet("Resumo", 0)
+
+    titulo_font = Font(bold=True, size=14, color="FFFFFF")
+    titulo_fill = PatternFill("solid", fgColor="2E5BBA")
+    header_font = Font(bold=True)
+    section_font = Font(bold=True, size=12)
+
+    total = len(linhas)
+    contagem_geral: dict[tuple[str, str], int] = {}
+    por_destinatario: dict[str, dict[tuple[str, str], int]] = {}
+    for l in linhas:
+        chave = (l.get("_estado") or "", l.get("_prazo_status") or "")
+        contagem_geral[chave] = contagem_geral.get(chave, 0) + 1
+        dest = l.get("_destinatario") or "(sem destinatário)"
+        por_destinatario.setdefault(dest, {})
+        por_destinatario[dest][chave] = por_destinatario[dest].get(chave, 0) + 1
+
+    row = 1
+    cell = ws.cell(row=row, column=1, value="Resumo do export")
+    cell.font = titulo_font
+    cell.fill = titulo_fill
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
+    row += 2
+
+    ws.cell(row=row, column=1, value="Total de linhas").font = header_font
+    ws.cell(row=row, column=2, value=total)
+    row += 2
+
+    # Combinações possíveis (Estado × Prazo)
+    combinacoes = [
+        (ESTADO_CONCLUIDA, PRAZO_NO_PRAZO),
+        (ESTADO_CONCLUIDA, PRAZO_ATRASADA),
+        (ESTADO_CONCLUIDA, PRAZO_SEM_PRAZO),
+        (ESTADO_EM_ABERTO, PRAZO_NO_PRAZO),
+        (ESTADO_EM_ABERTO, PRAZO_ATRASADA),
+        (ESTADO_EM_ABERTO, PRAZO_SEM_PRAZO),
+    ]
+
+    ws.cell(row=row, column=1, value="Distribuição").font = section_font
+    row += 1
+    for header_txt in ("Estado", "Prazo", "Qtd", "%"):
+        c = ws.cell(row=row, column=("Estado", "Prazo", "Qtd", "%").index(header_txt) + 1, value=header_txt)
+        c.font = header_font
+    row += 1
+    for estado, prazo in combinacoes:
+        qtd = contagem_geral.get((estado, prazo), 0)
+        pct = (qtd / total * 100) if total else 0
+        c_estado = ws.cell(row=row, column=1, value=estado)
+        c_prazo = ws.cell(row=row, column=2, value=prazo)
+        ws.cell(row=row, column=3, value=qtd)
+        ws.cell(row=row, column=4, value=f"{pct:.1f}%")
+        fill_e = estado_fills.get(estado)
+        if fill_e:
+            c_estado.fill = fill_e
+        fill_p = prazo_fills.get(prazo)
+        if fill_p:
+            c_prazo.fill = fill_p
+        row += 1
+
+    row += 2
+    ws.cell(row=row, column=1, value="Por destinatário").font = section_font
+    row += 1
+
+    headers_dest = [
+        "Destinatário",
+        "Total",
+        "Concluída no prazo",
+        "Concluída atrasada",
+        "Concluída sem prazo",
+        "Em aberto no prazo",
+        "Em aberto atrasada",
+        "Em aberto sem prazo",
+    ]
+    for col_idx, h in enumerate(headers_dest, start=1):
+        c = ws.cell(row=row, column=col_idx, value=h)
+        c.font = header_font
+    row += 1
+
+    for dest in sorted(por_destinatario.keys()):
+        contagens = por_destinatario[dest]
+        ws.cell(row=row, column=1, value=dest)
+        total_dest = sum(contagens.values())
+        ws.cell(row=row, column=2, value=total_dest)
+        ws.cell(row=row, column=3, value=contagens.get((ESTADO_CONCLUIDA, PRAZO_NO_PRAZO), 0))
+        ws.cell(row=row, column=4, value=contagens.get((ESTADO_CONCLUIDA, PRAZO_ATRASADA), 0))
+        ws.cell(row=row, column=5, value=contagens.get((ESTADO_CONCLUIDA, PRAZO_SEM_PRAZO), 0))
+        ws.cell(row=row, column=6, value=contagens.get((ESTADO_EM_ABERTO, PRAZO_NO_PRAZO), 0))
+        ws.cell(row=row, column=7, value=contagens.get((ESTADO_EM_ABERTO, PRAZO_ATRASADA), 0))
+        ws.cell(row=row, column=8, value=contagens.get((ESTADO_EM_ABERTO, PRAZO_SEM_PRAZO), 0))
+        row += 1
+
+    ws.freeze_panes = "A2"
+    larguras_resumo = [32, 12, 22, 22, 22, 22, 22, 22]
+    for i, w in enumerate(larguras_resumo, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
 
 
 @dataclass(frozen=True)
