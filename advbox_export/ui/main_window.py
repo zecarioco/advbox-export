@@ -122,9 +122,11 @@ class MainWindow(QMainWindow):
 
         m_aparencia = menu.addMenu("&Aparência")
         self.act_tema_claro = QAction("Tema &claro", self)
+        self.act_tema_claro.setMenuRole(QAction.MenuRole.NoRole)
         self.act_tema_claro.setCheckable(True)
         self.act_tema_claro.triggered.connect(lambda: self._mudar_tema("light"))
         self.act_tema_escuro = QAction("Tema &escuro", self)
+        self.act_tema_escuro.setMenuRole(QAction.MenuRole.NoRole)
         self.act_tema_escuro.setCheckable(True)
         self.act_tema_escuro.triggered.connect(lambda: self._mudar_tema("dark"))
         grupo_tema = QActionGroup(self)
@@ -145,6 +147,10 @@ class MainWindow(QMainWindow):
         a.triggered.connect(callback)
         if shortcut:
             a.setShortcut(shortcut)
+        # No macOS o Qt auto-move ações com nome "Sair"/"Sobre"/"Preferências"
+        # pro Apple Menu, esvaziando os menus de origem. NoRole força a ação
+        # a ficar onde foi colocada — preserva layout consistente entre os 3 SOs.
+        a.setMenuRole(QAction.MenuRole.NoRole)
         return a
 
     def _build_central(self) -> None:
