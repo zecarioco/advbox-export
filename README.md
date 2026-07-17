@@ -83,17 +83,34 @@ O export faz **duas passadas** pra cada período:
 
 Dedup por ID garante que tarefas que aparecem em ambas as passadas não se repitam. Isso significa que o export inclui tanto **o que foi entregue** quanto **o que ficou pra trás**, num único XLSX.
 
-A coluna **"Status"** identifica cada caso:
+Duas colunas — **"Estado"** e **"Prazo"** — identificam cada caso:
 
-| Status | Significado |
-|---|---|
-| **No prazo** | Concluída antes ou no prazo fatal |
-| **Atrasada** | Concluída depois do prazo fatal |
-| **Concluída** | Concluída, mas a tarefa não tinha prazo definido |
-| **Em aberto** | Ainda não concluída, prazo no futuro (ou sem prazo) |
-| **Em aberto atrasada** | Ainda não concluída, prazo já passou |
+| Estado | Significado | Cor |
+|---|---|---|
+| **Concluída** | A tarefa foi concluída | 🟢 verde |
+| **Em aberto** | Ainda não concluída | 🟡 amarelo |
+
+| Prazo | Significado | Cor |
+|---|---|---|
+| **No prazo** | (concluída) entregue antes/na data agendada OU (aberta) data agendada ainda no futuro | 🟢 verde |
+| **Atrasada** | (concluída) entregue depois da data agendada OU (aberta) data agendada já passou | 🔴 vermelho |
+| **Sem prazo** | A tarefa não tem `date` (data agendada) definida | ⚪ cinza |
 
 Pra cada tarefa, é emitida uma linha por destinatário. Tarefas em aberto mostram `Data Conclusão` vazia.
+
+**Datas no XLSX:**
+
+| Coluna | Campo na API | O que significa |
+|---|---|---|
+| **Data criada** | `created_at` | Quando a tarefa foi registrada no sistema |
+| **Data agendada** | `date` | Pra quando a tarefa foi agendada — **usada pelo cálculo de Prazo** |
+| **Prazo fatal** | `date_deadline` | Deadline opcional anotado na AdvBox (exibido pra info, não entra no cálculo de Prazo) |
+| **Data Conclusão** | `users[].completed` | Quando o destinatário marcou como concluída |
+
+**Duas abas no XLSX:**
+
+- **"Resumo"** (1ª aba) — dashboard executivo: total no período, distribuição por (Estado × Prazo), breakdown por destinatário com contagens.
+- **"Atividades"** (2ª aba) — todas as linhas com **AutoFilter** ligado no header. Cada coluna tem um dropdown pra filtrar dinamicamente (ex.: só linhas com Estado=`Em aberto` E Prazo=`Atrasada`, ou só de um destinatário específico) sem precisar regerar o export.
 
 > **Custo de tempo**: como o export faz 2 queries por mês de período, o tempo total fica aproximadamente **2× o de antes**. Ex: backfill 6 anos que antes levava ~25 min agora leva ~50 min.
 
@@ -120,51 +137,4 @@ Pra abrir a pasta das planilhas: **Histórico → Abrir pasta de exports**.
 
 ---
 
-## Desenvolvimento
-
-Pré-requisitos: Python 3.10+ e [uv](https://docs.astral.sh/uv/).
-
-```bash
-git clone <repo>
-cd advbox-export
-uv venv
-uv pip install -e .
-cp .env.example .env  # cole o ADVBOX_TOKEN nessa pasta pra rodar em dev
-.venv/bin/python -m advbox_export
-```
-
-Em dev, o `.env` na raiz tem precedência sobre o `config.json` salvo na pasta do usuário — útil pra testar com tokens diferentes sem editar a configuração do app.
-
-### Empacotamento manual
-
-```bash
-uv pip install -e ".[build]"
-uv run pyinstaller \
-  --noconfirm --windowed --name AdvBoxExport \
-  --add-data "advbox_export/ui/styles.qss:advbox_export/ui" \
-  --add-data "advbox_export/ui/styles_dark.qss:advbox_export/ui" \
-  --add-data "advbox_export/ui/fonts:advbox_export/ui/fonts" \
-  --add-data "advbox_export/ui/icons:advbox_export/ui/icons" \
-  advbox_export/__main__.py
-```
-
-(No Windows substitua `:` por `;` nos `--add-data`.)
-
-### Publicar release
-
-O jeito recomendado:
-
-```bash
-./scripts/release.sh 0.1.0
-```
-
-O script bump o `pyproject.toml`, comita, cria a tag `v0.1.0` e dá push. O [GitHub Actions](.github/workflows/build.yml) então builda os 3 sistemas em paralelo e anexa os artefatos (`.zip`, `.dmg`, `.tar.gz`) numa release nova no GitHub.
-
-Se quiser tagar à mão:
-
-```bash
-git tag v0.1.0
-git push --tags
-```
-
-Pushes pra `master` sem tag também disparam o build (artefatos ficam no Actions por 14 dias, sem criar release).
+Quer contribuir com código, gerar um build local ou publicar uma nova versão? Veja [`CONTRIBUTING.md`](CONTRIBUTING.md).
